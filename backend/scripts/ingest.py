@@ -17,7 +17,10 @@ sys.path.insert(0, BACKEND_DIR)
 
 from config import DATABASE_URL
 
-DATA_DIR = os.path.join(PROJECT_DIR, "data")
+# Check backend/data/ first (Railway), then project root data/
+DATA_DIR = os.path.join(BACKEND_DIR, "data")
+if not os.path.isdir(DATA_DIR):
+    DATA_DIR = os.path.join(PROJECT_DIR, "data")
 
 engine = create_engine(DATABASE_URL)
 
