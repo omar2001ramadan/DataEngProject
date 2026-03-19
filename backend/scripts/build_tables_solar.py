@@ -1,3 +1,4 @@
+from concurrent.futures import process
 import pandas as pd
 import psycopg2
 """
@@ -7,8 +8,8 @@ build PostgreSQL Solar_Generation table from the EIA solar data CSV
 # database connection parameters
 DB_HOST="localhost"
 DB_NAME="renewable_db"
-DB_USER="jhu"
-DB_PASSWORD="jhu123"
+DB_USER=process.env.get("USERNAME")
+DB_PASSWORD=process.env.get("PASSWORD")
 DB_PORT=5432
 DATA_FILE="data/solar_generation.csv"
 TABLE_NAME="Solar_Generation"
