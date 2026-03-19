@@ -1,0 +1,59 @@
+import pandas as pd
+import psycopg2
+"""
+Will Gillette
+build PostgreSQL Solar_Generation table from the EIA solar data CSV
+"""
+# database connection parameters
+DB_HOST="localhost"
+DB_NAME="renewable_db"
+DB_USER="jhu"
+DB_PASSWORD="jhu123"
+DB_PORT=5432
+DATA_FILE="data/solar_generation.csv"
+TABLE_NAME="Solar_Generation"
+def create_table(conn):
+    # create a solar generation table using burch's schemea
+    with conn.cursor() as cur:
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
+                generation_id SERIAL PRIMARY KEY,
+                respondent_id VARCHAR(10) NOT NULL REFERENCES Respondent(respondent_id),
+                period TIMESTAMP NOT NULL,
+                value_mwh DECIMAL(15, 3) NOT NULL
+            );
+        """)
+        conn.commit()
+        print(f"Table {TABLE_NAME} created successfully.")
+def insert_data(conn):
+    # load CSV data into Solar_Generation table
+    df=pd.read_csv(DATA_FILE)
+    # convert period to datetime if not already
+    df["period"] = pd.to_datetime(df["period"])
+    with conn.cursor() as cur:
+        for _, row in df.iterrows():
+            cur.execute(f"""
+                INSERT INTO {TABLE_NAME} (respondent_id, period, value_mwh)
+                VALUES (%s, %s, %s);
+            """, (row["respondent_id"], row["period"], row["value_mwh"]))
+        conn.commit()
+        print(f"Inserted {len(df)} rows into {TABLE_NAME}.")
+def main():
+    try:
+        # connect to postgreSQL database
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            port=DB_PORT
+        )
+        create_table(conn)
+        insert_data(conn)        
+        conn.close()
+        print("\nFinished building the PostgreSQL Solar_Generation table")
+    except psycopg2.Error as e:
+        print(f"Database error: {e}")
+        raise
+if __name__ == "__main__":
+    main()
