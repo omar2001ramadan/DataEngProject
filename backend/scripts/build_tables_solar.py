@@ -1,16 +1,18 @@
-from concurrent.futures import process
+import os
 import pandas as pd
 import psycopg2
+from dotenv import load_dotenv
 """
 Will Gillette
 build PostgreSQL Solar_Generation table from the EIA solar data CSV
 """
-# database connection parameters
-DB_HOST="localhost"
-DB_NAME="renewable_db"
-DB_USER=process.env.get("USERNAME")
-DB_PASSWORD=process.env.get("PASSWORD")
-DB_PORT=5432
+# database connection parameters    
+load_dotenv()
+DB_HOST = "localhost"
+DB_NAME = "renewable_db"
+DB_USER = os.getenv("USERNAME")
+DB_PASSWORD = os.getenv("PASSWORD")
+DB_PORT = 5432
 DATA_FILE="data/solar_generation.csv"
 TABLE_NAME="Solar_Generation"
 def create_table(conn):
