@@ -10,8 +10,8 @@ Build PostgreSQL Weather_Observation table from weather data CSV
 load_dotenv()
 DB_HOST = "localhost"
 DB_NAME = "renewable_db"
-DB_USER = os.getenv('USERNAME')
-DB_PASSWORD = os.getenv('PASSWORD')
+DB_USER = 'jhu'
+DB_PASSWORD = 'jhu123'
 DB_PORT = 5432
 DATA_FILE = "../data/weather_observation.csv"
 TABLE_NAME = "Weather_Observation"

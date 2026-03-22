@@ -10,10 +10,10 @@ build PostgreSQL Solar_Generation table from the EIA solar data CSV
 load_dotenv()
 DB_HOST = "localhost"
 DB_NAME = "renewable_db"
-DB_USER = os.getenv("USERNAME")
-DB_PASSWORD = os.getenv("PASSWORD")
+DB_USER = os.getenv('USERNAME')
+DB_PASSWORD = os.getenv('PASSWORD')
 DB_PORT = 5432
-DATA_FILE="data/solar_generation.csv"
+DATA_FILE="../data/eia_solar_hourly.csv"
 TABLE_NAME="Solar_Generation"
 def create_table(conn):
     # create a solar generation table using burch's schemea
@@ -39,7 +39,7 @@ def insert_data(conn):
             cur.execute(f"""
                 INSERT INTO {TABLE_NAME} (respondent_id, period, date_id, value_mwh)
                 VALUES (%s, %s, %s, %s);
-            """, (row["respondent_id"], row["period"], row["period"].date(), row["value_mwh"]))
+            """, (row["respondent"], row["period"], row["period"].date(), row["value"]))
         conn.commit()
         print(f"Inserted {len(df)} rows into {TABLE_NAME}.")
 def main():
