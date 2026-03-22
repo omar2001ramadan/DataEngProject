@@ -8,6 +8,7 @@ Produces one CSV per site.
 import requests
 import csv
 import time
+import pandas as pd
 from datetime import date, timedelta
 
 SITES = {
@@ -75,11 +76,42 @@ def pull_site(name, lat, lng):
     print(f"  {name}: Done — saved {day_num:,} days to {outfile}")
 
 
+def clean_site_csv(filename):
+    """Apply cleaning to a pulled CSV: type conversion, null/duplicate removal."""
+    df = pd.read_csv(filename)
+
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+    time_cols = ["sunrise", "sunset", "solar_noon",
+                 "civil_twilight_begin", "civil_twilight_end",
+                 "nautical_twilight_begin", "nautical_twilight_end",
+                 "astronomical_twilight_begin", "astronomical_twilight_end"]
+    for col in time_cols:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+
+    df["day_length"] = pd.to_numeric(df["day_length"], errors="coerce")
+
+    # Drop rows missing key fields
+    df = df.dropna(subset=["date", "sunrise", "sunset", "day_length"])
+
+    # Remove invalid rows where sunrise is after sunset
+    df = df[df["sunrise"] < df["sunset"]]
+
+    # Remove duplicates
+    df = df.drop_duplicates(subset=["date"])
+
+    df = df.sort_values("date").reset_index(drop=True)
+    df.to_csv(filename, index=False)
+    print(f"  Cleaned {filename}: {len(df)} rows")
+
+
 def main():
     for name, info in SITES.items():
         print(f"\nPulling sunrise/sunset for {name} ({info['desc']})...")
         print(f"  Coordinates: {info['lat']}, {info['lng']}")
         pull_site(name, info["lat"], info["lng"])
+        clean_site_csv(f"sunrise_sunset_{name}.csv")
 
     print("\nComplete!")
 

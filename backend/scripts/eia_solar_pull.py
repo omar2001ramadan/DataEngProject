@@ -79,7 +79,21 @@ def main():
     # Build DataFrame
     df = pd.DataFrame(all_records)
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
-    df["period"] = pd.to_datetime(df["period"])
+    df["period"] = pd.to_datetime(df["period"], errors="coerce")
+
+    # Filter to only solar fuel type
+    df = df[df["fueltype"] == FUEL_TYPE].copy()
+
+    # Drop rows missing key fields
+    df = df.dropna(subset=["period", "respondent", "value"])
+    df = df[df["respondent"].isin(RESPONDENTS)].copy()
+
+    # Remove duplicate observations
+    df = df.drop_duplicates(subset=["respondent", "period"])
+
+    # Fix negative solar values sometimes returned by EIA
+    df.loc[df["value"] < 0, "value"] = 0
+
     df.sort_values(["respondent", "period"], inplace=True)
     df.reset_index(drop=True, inplace=True)
 

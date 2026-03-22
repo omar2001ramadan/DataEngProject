@@ -73,7 +73,29 @@ def pull_site(name, station, desc):
     # Drop rows where all hourly fields are empty (daily summary rows)
     df = df.dropna(subset=HOURLY_FIELDS, how="all")
 
-    df["DATE"] = pd.to_datetime(df["DATE"])
+    df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
+
+    # Numeric conversions for all measurement columns
+    numeric_cols = [
+        "HourlyDryBulbTemperature", "HourlyDewPointTemperature",
+        "HourlyRelativeHumidity", "HourlyWindSpeed", "HourlyWindDirection",
+        "HourlyWindGustSpeed", "HourlyPrecipitation", "HourlyVisibility",
+        "HourlyStationPressure", "HourlyAltimeterSetting", "HourlyWetBulbTemperature",
+    ]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Fill missing precipitation with 0
+    if "HourlyPrecipitation" in df.columns:
+        df["HourlyPrecipitation"] = df["HourlyPrecipitation"].fillna(0)
+
+    # Drop rows missing station or timestamp
+    df = df.dropna(subset=["STATION", "DATE", "NAME", "LATITUDE", "LONGITUDE"])
+
+    # Remove duplicate observations per station/timestamp
+    df = df.drop_duplicates(subset=["STATION", "DATE"])
+
     df.sort_values("DATE", inplace=True)
     df.reset_index(drop=True, inplace=True)
 
