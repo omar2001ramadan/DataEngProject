@@ -6,6 +6,9 @@ process.env
 .env
 venv/
 .venv/
+.venv/
+env/
+ds_env
 
 # Node
 node_modules/

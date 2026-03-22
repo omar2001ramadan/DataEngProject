@@ -23,6 +23,7 @@ def create_table(conn):
                 generation_id SERIAL PRIMARY KEY,
                 respondent_id VARCHAR(10) NOT NULL REFERENCES Respondent(respondent_id),
                 period TIMESTAMP NOT NULL,
+                date_id DATE NOT NULL REFERENCES Date_Dimension(date_id),
                 value_mwh DECIMAL(15, 3) NOT NULL
             );
         """)
@@ -36,9 +37,9 @@ def insert_data(conn):
     with conn.cursor() as cur:
         for _, row in df.iterrows():
             cur.execute(f"""
-                INSERT INTO {TABLE_NAME} (respondent_id, period, value_mwh)
-                VALUES (%s, %s, %s);
-            """, (row["respondent_id"], row["period"], row["value_mwh"]))
+                INSERT INTO {TABLE_NAME} (respondent_id, period, date_id, value_mwh)
+                VALUES (%s, %s, %s, %s);
+            """, (row["respondent_id"], row["period"], row["period"].date(), row["value_mwh"]))
         conn.commit()
         print(f"Inserted {len(df)} rows into {TABLE_NAME}.")
 def main():

@@ -1,4 +1,3 @@
-from ast import Load
 import os
 import pandas as pd
 import psycopg2
