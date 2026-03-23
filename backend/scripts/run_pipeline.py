@@ -1,7 +1,7 @@
 """
 Full pipeline entry point.
 
-Step 1: Load historical CSVs into PostgreSQL (ingest.py)
+Step 1: Load historical CSVs into PostgreSQL via team build_tables scripts
 Step 2: Pull fresh EIA solar data from the latest record to now
 Step 3: Pull fresh sunrise/sunset data from the latest record to now
 Step 4: Rebuild materialized views
@@ -21,6 +21,7 @@ from sqlalchemy import create_engine, text
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.dirname(SCRIPT_DIR)
 sys.path.insert(0, BACKEND_DIR)
+sys.path.insert(0, SCRIPT_DIR)
 
 from config import DATABASE_URL
 
@@ -36,7 +37,7 @@ RESPONDENTS = ["CISO", "ERCO"]
 def get_latest_solar_period():
     """Get the most recent solar generation timestamp in the database."""
     with engine.connect() as conn:
-        result = conn.execute(text("SELECT MAX(period) FROM solar_generation")).scalar()
+        result = conn.execute(text("SELECT MAX(period) FROM Solar_Generation")).scalar()
     return result
 
 
@@ -66,7 +67,7 @@ def fetch_eia_page(offset, start_date, end_date):
     raise Exception(f"EIA API failed after retries at offset {offset}")
 
 
-def pull_fresh_solar(region_map):
+def pull_fresh_solar():
     """Pull EIA solar data from the latest DB record to now and insert new rows."""
     latest = get_latest_solar_period()
     if latest is None:
@@ -105,23 +106,23 @@ def pull_fresh_solar(region_map):
     df = df.drop_duplicates(subset=["respondent", "period"])
     df.loc[df["value"] < 0, "value"] = 0
 
-    df["region_id"] = df["respondent"].map(region_map)
+    df["respondent_id"] = df["respondent"]
+    df["date_id"] = df["period"].dt.date
     df["value_mwh"] = df["value"]
-    df = df[["period", "region_id", "value_mwh"]].dropna()
-    df["region_id"] = df["region_id"].astype(int)
+    df = df[["respondent_id", "period", "date_id", "value_mwh"]].dropna()
 
-    df.to_sql("solar_generation", engine, if_exists="append", index=False, method="multi", chunksize=5000)
+    df.to_sql("Solar_Generation", engine, if_exists="append", index=False, method="multi", chunksize=5000)
     print(f"  Inserted {len(df)} new solar rows.")
     return len(df)
 
 
 # --- Sunrise/Sunset Pull ---
 
-def get_latest_sunrise_date(region_id):
+def get_latest_timing_date(respondent_id):
     with engine.connect() as conn:
         result = conn.execute(
-            text("SELECT MAX(date) FROM sunrise_sunset WHERE region_id = :rid"),
-            {"rid": region_id}
+            text("SELECT MAX(date) FROM Daily_Solar_Timing WHERE respondent_id = :rid"),
+            {"rid": respondent_id}
         ).scalar()
     return result
 
@@ -147,25 +148,24 @@ SITE_COORDS = {
 }
 
 
-def pull_fresh_sunrise(region_map):
+def pull_fresh_timing():
     """Pull sunrise/sunset data from the latest DB record to today."""
     total_inserted = 0
     today = date.today()
 
-    for region_code, coords in SITE_COORDS.items():
-        region_id = region_map[region_code]
-        latest = get_latest_sunrise_date(region_id)
+    for respondent_id, coords in SITE_COORDS.items():
+        latest = get_latest_timing_date(respondent_id)
         if latest is None:
-            print(f"  No existing sunrise data for {region_code}, skipping.")
+            print(f"  No existing timing data for {respondent_id}, skipping.")
             continue
 
         start = latest + timedelta(days=1)
         if start > today:
-            print(f"  {region_code} sunrise data is current.")
+            print(f"  {respondent_id} timing data is current.")
             continue
 
         days_needed = (today - start).days + 1
-        print(f"  Pulling {days_needed} days of sunrise/sunset for {region_code}...")
+        print(f"  Pulling {days_needed} days of sunrise/sunset for {respondent_id}...")
 
         rows = []
         current = start
@@ -176,20 +176,31 @@ def pull_fresh_sunrise(region_map):
                 sunset = pd.to_datetime(result.get("sunset"), errors="coerce")
                 day_length = result.get("day_length")
                 if sunrise is not pd.NaT and sunset is not pd.NaT and sunrise < sunset:
-                    rows.append({
-                        "region_id": region_id,
+                    row = {
+                        "respondent_id": respondent_id,
+                        "date_id": current,
                         "date": current,
                         "sunrise": sunrise,
                         "sunset": sunset,
-                        "day_length_seconds": int(day_length),
-                    })
+                        "day_length_sec": int(day_length),
+                    }
+                    for key, col in [("solar_noon", "solar_noon"),
+                                     ("civil_twilight_begin", "civil_twilight_begin"),
+                                     ("civil_twilight_end", "civil_twilight_end"),
+                                     ("nautical_twilight_begin", "nautical_twilight_begin"),
+                                     ("nautical_twilight_end", "nautical_twilight_end"),
+                                     ("astronomical_twilight_begin", "astronomical_twilight_begin"),
+                                     ("astronomical_twilight_end", "astronomical_twilight_end")]:
+                        val = result.get(key)
+                        row[col] = pd.to_datetime(val, errors="coerce") if val else None
+                    rows.append(row)
             current += timedelta(days=1)
             time.sleep(0.5)
 
         if rows:
             df = pd.DataFrame(rows)
-            df.to_sql("sunrise_sunset", engine, if_exists="append", index=False, method="multi")
-            print(f"  Inserted {len(df)} new sunrise/sunset rows for {region_code}.")
+            df.to_sql("Daily_Solar_Timing", engine, if_exists="append", index=False, method="multi")
+            print(f"  Inserted {len(df)} new timing rows for {respondent_id}.")
             total_inserted += len(df)
 
     return total_inserted
@@ -213,26 +224,21 @@ def main():
     print("Solar Energy Pipeline")
     print("=" * 50)
 
-    # Step 1: Run historical ingestion
+    # Step 1: Run historical ingestion via team scripts
     print("\n[Step 1] Loading historical data from CSVs...")
-    from scripts.ingest import main as ingest_main
+    from ingest import main as ingest_main
     ingest_main()
-
-    # Get region map for fresh pulls
-    with engine.connect() as conn:
-        rows = conn.execute(text("SELECT id, code FROM regions")).fetchall()
-        region_map = {row[1]: row[0] for row in rows}
 
     # Step 2: Pull fresh solar data
     print("\n[Step 2] Pulling fresh EIA solar data...")
-    new_solar = pull_fresh_solar(region_map)
+    new_solar = pull_fresh_solar()
 
     # Step 3: Pull fresh sunrise/sunset data
     print("\n[Step 3] Pulling fresh sunrise/sunset data...")
-    new_sunrise = pull_fresh_sunrise(region_map)
+    new_timing = pull_fresh_timing()
 
     # Step 4: Refresh views if new data was added
-    if new_solar > 0 or new_sunrise > 0:
+    if new_solar > 0 or new_timing > 0:
         print("\n[Step 4] Refreshing materialized views...")
         refresh_views()
     else:
@@ -242,8 +248,9 @@ def main():
     print("\n" + "=" * 50)
     print("Pipeline complete!")
     with engine.connect() as conn:
-        for table in ["regions", "weather_stations", "solar_generation",
-                       "weather_hourly", "sunrise_sunset", "daily_summary", "monthly_summary"]:
+        for table in ['Date_Dimension', 'Respondent', 'Weather_Station',
+                       'Solar_Generation', 'Weather_Observation', 'Daily_Solar_Timing',
+                       'daily_summary', 'monthly_summary']:
             count = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
             print(f"  {table}: {count:,} rows")
     print("=" * 50)

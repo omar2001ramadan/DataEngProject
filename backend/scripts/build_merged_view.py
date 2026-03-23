@@ -1,10 +1,6 @@
 import psycopg2
-import os
-DB_HOST = "localhost"
-DB_NAME = "renewable_db"
-DB_USER = os.getenv('USERNAME')
-DB_PASSWORD = os.getenv('PASSWORD')
-DB_PORT = 5432
+from db_connect import get_connection
+
 VIEW_NAME = "merged_weather_solar_view"
 create_view_sql = f"""
     CREATE OR REPLACE VIEW {VIEW_NAME} AS
@@ -61,7 +57,6 @@ create_view_sql = f"""
     INNER JOIN Weather_Station ws ON wo.station_id = ws.station_id
     INNER JOIN Respondent r ON ws.respondent_id = r.respondent_id
     INNER JOIN Date_Dimension dd ON wo.date_id = dd.date_id
-    -- use a left join to include all weather observations even if solar timing or generation data is missing for that date/respondent
     LEFT JOIN Daily_Solar_Timing dst
         ON r.respondent_id = dst.respondent_id
         AND dd.date_id = dst.date_id
@@ -71,14 +66,7 @@ create_view_sql = f"""
 """
 
 def create_view():
-    # create the sql view that merges the tables from burch's schema
-    conn = psycopg2.connect(
-        host=DB_HOST,
-        database=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        port=DB_PORT
-    )
+    conn = get_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(create_view_sql)
@@ -86,5 +74,6 @@ def create_view():
             print(f"View '{VIEW_NAME}' created successfully.")
     finally:
         conn.close()
+
 if __name__ == "__main__":
     create_view()

@@ -11,28 +11,27 @@ def daylight():
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
 
-    where = ["r.code = :region"]
+    where = ["t.respondent_id = :region"]
     params = {"region": region}
     if start_date:
-        where.append("ss.date >= :start_date")
+        where.append("t.date >= :start_date")
         params["start_date"] = start_date
     if end_date:
-        where.append("ss.date <= :end_date")
+        where.append("t.date <= :end_date")
         params["end_date"] = end_date
 
     query = text(f"""
         SELECT
-            ss.date,
-            ss.sunrise,
-            ss.sunset,
-            ss.day_length_seconds,
+            t.date,
+            t.sunrise,
+            t.sunset,
+            t.day_length_sec,
             ds.total_mwh
-        FROM sunrise_sunset ss
-        JOIN regions r ON ss.region_id = r.id
+        FROM "Daily_Solar_Timing" t
         LEFT JOIN daily_summary ds
-            ON r.code = ds.region AND ss.date = ds.date
+            ON t.respondent_id = ds.region AND t.date = ds.date
         WHERE {" AND ".join(where)}
-        ORDER BY ss.date
+        ORDER BY t.date
     """)
 
     rows = db.session.execute(query, params).mappings().all()
@@ -40,6 +39,6 @@ def daylight():
         "date": str(r["date"]),
         "sunrise": r["sunrise"].strftime("%H:%M") if r["sunrise"] else None,
         "sunset": r["sunset"].strftime("%H:%M") if r["sunset"] else None,
-        "day_length_hours": round(float(r["day_length_seconds"]) / 3600, 2) if r["day_length_seconds"] else None,
+        "day_length_hours": round(float(r["day_length_sec"]) / 3600, 2) if r["day_length_sec"] else None,
         "total_mwh": round(float(r["total_mwh"]), 1) if r["total_mwh"] else None,
     } for r in rows])

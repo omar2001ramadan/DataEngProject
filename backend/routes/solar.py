@@ -50,17 +50,17 @@ def solar_hourly():
         SELECT
             EXTRACT(HOUR FROM s.period)::int AS hour,
             s.value_mwh,
-            w.temperature,
-            w.humidity,
-            w.wind_speed
-        FROM solar_generation s
-        JOIN regions r ON s.region_id = r.id
-        LEFT JOIN weather_stations ws ON ws.region_id = r.id
-        LEFT JOIN weather_hourly w
-            ON w.station_id = ws.id
-            AND DATE(s.period) = DATE(w.hour)
-            AND EXTRACT(HOUR FROM s.period) = EXTRACT(HOUR FROM w.hour)
-        WHERE r.code = :region AND DATE(s.period) = :date
+            w.dry_bulb_temp_c AS temperature,
+            w.relative_humidity_pct AS humidity,
+            w.wind_speed_kmh AS wind_speed
+        FROM "Solar_Generation" s
+        JOIN "Respondent" r ON s.respondent_id = r.respondent_id
+        LEFT JOIN "Weather_Station" ws ON ws.respondent_id = r.respondent_id
+        LEFT JOIN "Weather_Observation" w
+            ON w.station_id = ws.station_id
+            AND DATE(s.period) = DATE(w.observation_datetime)
+            AND EXTRACT(HOUR FROM s.period) = EXTRACT(HOUR FROM w.observation_datetime)
+        WHERE r.respondent_id = :region AND DATE(s.period) = :date
         ORDER BY hour
     """)
 
@@ -68,9 +68,8 @@ def solar_hourly():
 
     # Get sunrise/sunset for that day
     sun_query = text("""
-        SELECT ss.sunrise, ss.sunset FROM sunrise_sunset ss
-        JOIN regions r ON ss.region_id = r.id
-        WHERE r.code = :region AND ss.date = :date
+        SELECT t.sunrise, t.sunset FROM "Daily_Solar_Timing" t
+        WHERE t.respondent_id = :region AND t.date = :date
     """)
     sun = db.session.execute(sun_query, {"region": region, "date": date}).mappings().first()
 

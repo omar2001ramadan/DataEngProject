@@ -1,22 +1,15 @@
-import os
 import pandas as pd
 import psycopg2
-from dotenv import load_dotenv
+from db_connect import get_connection, data_file
 """
 Will Gillette
 build PostgreSQL Solar_Generation table from the EIA solar data CSV
 """
-# database connection parameters    
-load_dotenv()
-DB_HOST = "localhost"
-DB_NAME = "renewable_db"
-DB_USER = os.getenv('USERNAME')
-DB_PASSWORD = os.getenv('PASSWORD')
-DB_PORT = 5432
-DATA_FILE="../data/eia_solar_hourly.csv"
-TABLE_NAME="Solar_Generation"
+DATA_FILE = data_file("eia_solar_hourly.csv")
+TABLE_NAME = "Solar_Generation"
+
 def create_table(conn):
-    # create a solar generation table using burch's schemea
+    # create a solar generation table using burch's schema
     with conn.cursor() as cur:
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
@@ -29,9 +22,10 @@ def create_table(conn):
         """)
         conn.commit()
         print(f"Table {TABLE_NAME} created successfully.")
+
 def insert_data(conn):
     # load CSV data into Solar_Generation table
-    df=pd.read_csv(DATA_FILE)
+    df = pd.read_csv(DATA_FILE)
     # convert period to datetime if not already
     df["period"] = pd.to_datetime(df["period"])
     with conn.cursor() as cur:
@@ -42,22 +36,17 @@ def insert_data(conn):
             """, (row["respondent"], row["period"], row["period"].date(), row["value"]))
         conn.commit()
         print(f"Inserted {len(df)} rows into {TABLE_NAME}.")
+
 def main():
     try:
-        # connect to postgreSQL database
-        conn = psycopg2.connect(
-            host=DB_HOST,
-            database=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            port=DB_PORT
-        )
+        conn = get_connection()
         create_table(conn)
-        insert_data(conn)        
+        insert_data(conn)
         conn.close()
         print("\nFinished building the PostgreSQL Solar_Generation table")
     except psycopg2.Error as e:
         print(f"Database error: {e}")
         raise
+
 if __name__ == "__main__":
     main()

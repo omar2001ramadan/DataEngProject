@@ -1,22 +1,14 @@
-import os
 import pandas as pd
 import psycopg2
-from dotenv import load_dotenv
+from db_connect import get_connection, data_file
 
 """
 Will Gillette
 Build PostgreSQL Daily_Solar_Timing table from solar timing data
 """
 
-# Database connection parameters    
-load_dotenv()
-DB_HOST = "localhost"
-DB_NAME = "renewable_db"
-DB_USER = os.getenv('USERNAME')
-DB_PASSWORD = os.getenv('PASSWORD')
-DB_PORT = 5432
-DATA_FILE1 = "../data/sunrise_sunset_CISO.csv"
-DATA_FILE2 = "../data/sunrise_sunset_ERCO.csv"
+DATA_FILE1 = data_file("sunrise_sunset_CISO.csv")
+DATA_FILE2 = data_file("sunrise_sunset_ERCO.csv")
 TABLE_NAME = "Daily_Solar_Timing"
 
 def create_table(conn):
@@ -57,38 +49,32 @@ def insert_data(conn):
                                           civil_twilight_begin, civil_twilight_end, nautical_twilight_begin,
                                           nautical_twilight_end, astronomical_twilight_begin, astronomical_twilight_end)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-            """, ('CISO', row["date"], row["date"], row.get("sunrise"), row.get("sunset"), 
-                  row.get("solar_noon"), row.get("day_length_sec"), row.get("civil_twilight_begin"),
-                  row.get("civil_twilight_end"), row.get("nautical_twilight_begin"), 
-                  row.get("nautical_twilight_end"), row.get("astronomical_twilight_begin"), 
+            """, ('CISO', row["date"], row["date"], row.get("sunrise"), row.get("sunset"),
+                  row.get("solar_noon"), row.get("day_length"), row.get("civil_twilight_begin"),
+                  row.get("civil_twilight_end"), row.get("nautical_twilight_begin"),
+                  row.get("nautical_twilight_end"), row.get("astronomical_twilight_begin"),
                   row.get("astronomical_twilight_end")))
         conn.commit()
-        print(f"Inserted {len(df1)} rows into {TABLE_NAME}.")
+        print(f"Inserted {len(df1)} CISO rows into {TABLE_NAME}.")
         for _, row in df2.iterrows():
             cur.execute(f"""
                 INSERT INTO {TABLE_NAME} (respondent_id, date_id, date, sunrise, sunset, solar_noon, day_length_sec,
                                           civil_twilight_begin, civil_twilight_end, nautical_twilight_begin,
                                           nautical_twilight_end, astronomical_twilight_begin, astronomical_twilight_end)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-            """, ('ERCO', row["date"], row["date"], row.get("sunrise"), row.get("sunset"), 
-                  row.get("solar_noon"), row.get("day_length_sec"), row.get("civil_twilight_begin"),
-                  row.get("civil_twilight_end"), row.get("nautical_twilight_begin"), 
-                  row.get("nautical_twilight_end"), row.get("astronomical_twilight_begin"), 
+            """, ('ERCO', row["date"], row["date"], row.get("sunrise"), row.get("sunset"),
+                  row.get("solar_noon"), row.get("day_length"), row.get("civil_twilight_begin"),
+                  row.get("civil_twilight_end"), row.get("nautical_twilight_begin"),
+                  row.get("nautical_twilight_end"), row.get("astronomical_twilight_begin"),
                   row.get("astronomical_twilight_end")))
         conn.commit()
-        print(f"Inserted {len(df2)} rows into {TABLE_NAME}.")
+        print(f"Inserted {len(df2)} ERCO rows into {TABLE_NAME}.")
 
 def main():
     try:
-        conn = psycopg2.connect(
-            host=DB_HOST,
-            database=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            port=DB_PORT
-        )
+        conn = get_connection()
         create_table(conn)
-        insert_data(conn)        
+        insert_data(conn)
         conn.close()
         print("\nFinished building the PostgreSQL Daily_Solar_Timing table")
     except psycopg2.Error as e:

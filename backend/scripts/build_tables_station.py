@@ -1,20 +1,13 @@
-import os
 import pandas as pd
 import psycopg2
-from dotenv import load_dotenv
+from db_connect import get_connection, data_file
 """
 Will Gillette
 Build PostgreSQL Weather Station table from the EIA station data CSV
 """
-# Database connection parameters    
-load_dotenv()
-DB_HOST = "localhost"
-DB_NAME = "renewable_db"
-DB_USER = os.getenv('USERNAME')
-DB_PASSWORD = os.getenv('PASSWORD')
-DB_PORT = 5432
-DATA_FILE = "../data/weather_station.csv"
+DATA_FILE = data_file("weather_station.csv")
 TABLE_NAME = "Weather_Station"
+
 def create_table(conn):
     # build weather station table using burch's schema
     with conn.cursor() as cur:
@@ -45,15 +38,9 @@ def insert_data(conn):
 
 def main():
     try:
-        conn = psycopg2.connect(
-            host=DB_HOST,
-            database=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            port=DB_PORT
-        )
+        conn = get_connection()
         create_table(conn)
-        insert_data(conn)        
+        insert_data(conn)
         conn.close()
         print("\nFinished building the PostgreSQL Weather_Station table")
     except psycopg2.Error as e:

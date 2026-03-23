@@ -3,58 +3,83 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
-class Region(db.Model):
-    __tablename__ = "regions"
-    id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(10), unique=True, nullable=False)
-    name = db.Column(db.String(100), nullable=False)
+class DateDimension(db.Model):
+    __tablename__ = "Date_Dimension"
+    date_id = db.Column(db.Date, primary_key=True)
+    day_of_week = db.Column(db.String(10))
+    month = db.Column(db.Integer)
+    month_name = db.Column(db.String(10))
+    quarter = db.Column(db.Integer)
+    year = db.Column(db.Integer)
+    season = db.Column(db.String(10))
+    is_weekend = db.Column(db.Boolean)
 
-    stations = db.relationship("WeatherStation", backref="region")
-    solar_records = db.relationship("SolarGeneration", backref="region")
-    sunrise_records = db.relationship("SunriseSunset", backref="region")
+
+class Respondent(db.Model):
+    __tablename__ = "Respondent"
+    respondent_id = db.Column(db.String(10), primary_key=True)
+    respondent_name = db.Column(db.String(255), nullable=False)
+    region_latitude = db.Column(db.Float)
+    region_longitude = db.Column(db.Float)
+
+    stations = db.relationship("WeatherStation", backref="respondent")
+    solar_records = db.relationship("SolarGeneration", backref="respondent")
+    timing_records = db.relationship("DailySolarTiming", backref="respondent")
 
 
 class WeatherStation(db.Model):
-    __tablename__ = "weather_stations"
-    id = db.Column(db.Integer, primary_key=True)
-    region_id = db.Column(db.Integer, db.ForeignKey("regions.id"), nullable=False, index=True)
-    station_code = db.Column(db.String(20), unique=True, nullable=False)
-    name = db.Column(db.String(100), nullable=False)
-    latitude = db.Column(db.Float, nullable=False)
-    longitude = db.Column(db.Float, nullable=False)
+    __tablename__ = "Weather_Station"
+    station_id = db.Column(db.String(50), primary_key=True)
+    station_name = db.Column(db.String(255), nullable=False)
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    respondent_id = db.Column(db.String(10), db.ForeignKey("Respondent.respondent_id"), nullable=False, index=True)
 
-    weather_records = db.relationship("WeatherHourly", backref="station")
+    observations = db.relationship("WeatherObservation", backref="station")
 
 
 class SolarGeneration(db.Model):
-    __tablename__ = "solar_generation"
-    id = db.Column(db.Integer, primary_key=True)
+    __tablename__ = "Solar_Generation"
+    generation_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    respondent_id = db.Column(db.String(10), db.ForeignKey("Respondent.respondent_id"), nullable=False, index=True)
     period = db.Column(db.DateTime, nullable=False, index=True)
-    region_id = db.Column(db.Integer, db.ForeignKey("regions.id"), nullable=False, index=True)
+    date_id = db.Column(db.Date, db.ForeignKey("Date_Dimension.date_id"), nullable=False)
     value_mwh = db.Column(db.Float, nullable=False)
 
 
-class WeatherHourly(db.Model):
-    __tablename__ = "weather_hourly"
-    id = db.Column(db.Integer, primary_key=True)
-    station_id = db.Column(db.Integer, db.ForeignKey("weather_stations.id"), nullable=False, index=True)
-    hour = db.Column(db.DateTime, nullable=False, index=True)
-    temperature = db.Column(db.Float)
-    dew_point = db.Column(db.Float)
-    humidity = db.Column(db.Float)
-    wind_speed = db.Column(db.Float)
-    wind_direction = db.Column(db.String(10))
-    wind_gust = db.Column(db.Float)
-    precipitation = db.Column(db.Float)
-    visibility = db.Column(db.Float)
-    pressure = db.Column(db.Float)
+class WeatherObservation(db.Model):
+    __tablename__ = "Weather_Observation"
+    observation_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    station_id = db.Column(db.String(50), db.ForeignKey("Weather_Station.station_id"), index=True)
+    date_id = db.Column(db.Date, db.ForeignKey("Date_Dimension.date_id"))
+    observation_datetime = db.Column(db.DateTime, index=True)
+    dry_bulb_temp_c = db.Column(db.Float)
+    dew_point_temp_c = db.Column(db.Float)
+    relative_humidity_pct = db.Column(db.Float)
+    wet_bulb_temp_c = db.Column(db.Float)
+    wind_speed_kmh = db.Column(db.Float)
+    wind_direction_deg = db.Column(db.Integer)
+    wind_gust_speed_kmh = db.Column(db.Float)
+    precipitation_mm = db.Column(db.Float)
+    sky_conditions = db.Column(db.String(100))
+    visibility_km = db.Column(db.Float)
+    station_pressure_hpa = db.Column(db.Float)
+    altimeter_setting_hpa = db.Column(db.Float)
 
 
-class SunriseSunset(db.Model):
-    __tablename__ = "sunrise_sunset"
-    id = db.Column(db.Integer, primary_key=True)
-    region_id = db.Column(db.Integer, db.ForeignKey("regions.id"), nullable=False, index=True)
+class DailySolarTiming(db.Model):
+    __tablename__ = "Daily_Solar_Timing"
+    timing_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    respondent_id = db.Column(db.String(10), db.ForeignKey("Respondent.respondent_id"), nullable=False, index=True)
+    date_id = db.Column(db.Date, db.ForeignKey("Date_Dimension.date_id"))
     date = db.Column(db.Date, nullable=False, index=True)
-    sunrise = db.Column(db.DateTime, nullable=False)
-    sunset = db.Column(db.DateTime, nullable=False)
-    day_length_seconds = db.Column(db.Integer, nullable=False)
+    sunrise = db.Column(db.DateTime)
+    sunset = db.Column(db.DateTime)
+    solar_noon = db.Column(db.DateTime)
+    day_length_sec = db.Column(db.Integer)
+    civil_twilight_begin = db.Column(db.DateTime)
+    civil_twilight_end = db.Column(db.DateTime)
+    nautical_twilight_begin = db.Column(db.DateTime)
+    nautical_twilight_end = db.Column(db.DateTime)
+    astronomical_twilight_begin = db.Column(db.DateTime)
+    astronomical_twilight_end = db.Column(db.DateTime)

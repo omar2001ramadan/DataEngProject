@@ -1,20 +1,12 @@
-import os
 import psycopg2
-from dotenv import load_dotenv
+from db_connect import DB_HOST, DB_USER, DB_PASSWORD, DB_PORT, DB_NAME
 """
 Will Gillette
-Create renewable_db PostgreSQL database
+Create PostgreSQL database
 """
-load_dotenv()
-DB_HOST = "localhost"
-DB_NAME = "renewable_db"
-DB_USER = os.getenv('USERNAME')
-DB_PASSWORD = os.getenv('PASSWORD')
-DB_PORT = 5432
 def create_database():
-    # create the renewable_db database
+    # create the database
     try:
-        # connect to default postgres database
         conn = psycopg2.connect(
             host=DB_HOST,
             database="postgres",
@@ -31,5 +23,6 @@ def create_database():
     except psycopg2.Error as e:
         print(f"Database error: {e}")
         raise
+
 if __name__ == "__main__":
     create_database()

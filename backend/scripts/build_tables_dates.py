@@ -1,21 +1,11 @@
-import os
 import pandas as pd
 import psycopg2
-from dotenv import load_dotenv
 from datetime import datetime, timedelta
-
+from db_connect import get_connection
 """
 Will Gillette
 Build PostgreSQL Date_Dimension table
 """
-
-# Database connection parameters    
-load_dotenv()
-DB_HOST = "localhost"
-DB_NAME = "renewable_db"
-DB_USER = os.getenv('USERNAME')
-DB_PASSWORD = os.getenv('PASSWORD')
-DB_PORT = 5432
 TABLE_NAME = "Date_Dimension"
 
 def get_season(month):
@@ -76,15 +66,9 @@ def insert_data(conn):
 
 def main():
     try:
-        conn = psycopg2.connect(
-            host=DB_HOST,
-            database=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            port=DB_PORT
-        )
+        conn = get_connection()
         create_table(conn)
-        insert_data(conn)        
+        insert_data(conn)
         conn.close()
         print("\nFinished building the PostgreSQL Date_Dimension table")
     except psycopg2.Error as e:

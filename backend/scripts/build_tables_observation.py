@@ -1,25 +1,16 @@
-import os
 import pandas as pd
 import psycopg2
-from dotenv import load_dotenv
+from db_connect import get_connection, data_file
 """
 Will Gillette
 Build PostgreSQL Weather_Observation table from weather data CSV
 """
-# Database connection parameters    
-load_dotenv()
-DB_HOST = "localhost"
-DB_NAME = "renewable_db"
-DB_USER = 'jhu'
-DB_PASSWORD = 'jhu123'
-DB_PORT = 5432
-DATA_FILE = "../data/weather_observation.csv"
+DATA_FILE = data_file("weather_observation.csv")
 TABLE_NAME = "Weather_Observation"
+
 def create_table(conn):
     # create weather observation table
     with conn.cursor() as cur:
-        cur.execute(f"""
-            DROP TABLE IF EXISTS {TABLE_NAME};""")
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
                 observation_id SERIAL PRIMARY KEY,
@@ -44,16 +35,17 @@ def create_table(conn):
         """)
         conn.commit()
         print(f"Table {TABLE_NAME} created successfully.")
+
 def insert_data(conn):
     # load CSV data into Weather_Observation table
-    df = pd.read_csv(DATA_FILE, dtype={"station_id": str,"wind_direction_deg": "Int64"})
+    df = pd.read_csv(DATA_FILE, dtype={"station_id": str, "wind_direction_deg": "Int64"})
     df = df.astype(object).where(df.notnull(), None)
     df["date_id"] = pd.to_datetime(df["observation_datetime"]).dt.date
     with conn.cursor() as cur:
         for _, row in df.iterrows():
             cur.execute(f"""
-                INSERT INTO {TABLE_NAME} (station_id, date_id, observation_datetime, dry_bulb_temp_c, 
-                dew_point_temp_c, relative_humidity_pct, wet_bulb_temp_c, wind_speed_kmh, wind_direction_deg, 
+                INSERT INTO {TABLE_NAME} (station_id, date_id, observation_datetime, dry_bulb_temp_c,
+                dew_point_temp_c, relative_humidity_pct, wet_bulb_temp_c, wind_speed_kmh, wind_direction_deg,
                 wind_gust_speed_kmh, precipitation_mm, sky_conditions, visibility_km, station_pressure_hpa, altimeter_setting_hpa)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
             """, (row["station_id"], row["date_id"], row["observation_datetime"], row.get("dry_bulb_temp_c"),
@@ -66,15 +58,9 @@ def insert_data(conn):
 
 def main():
     try:
-        conn = psycopg2.connect(
-            host=DB_HOST,
-            database=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            port=DB_PORT
-        )
+        conn = get_connection()
         create_table(conn)
-        insert_data(conn)        
+        insert_data(conn)
         conn.close()
         print("\nFinished building the PostgreSQL Weather_Observation table")
     except psycopg2.Error as e:
