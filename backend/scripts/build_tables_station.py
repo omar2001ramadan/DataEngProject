@@ -6,7 +6,7 @@ Will Gillette
 Build PostgreSQL Weather Station table from the EIA station data CSV
 """
 DATA_FILE = data_file("weather_station.csv")
-TABLE_NAME = "Weather_Station"
+TABLE_NAME = "weather_station"
 
 def create_table(conn):
     # build weather station table using burch's schema
@@ -18,7 +18,7 @@ def create_table(conn):
                 latitude DECIMAL(10, 8),
                 longitude DECIMAL(11, 8),
                 respondent_id VARCHAR(10) NOT NULL,
-                FOREIGN KEY (respondent_id) REFERENCES Respondent(respondent_id)
+                FOREIGN KEY (respondent_id) REFERENCES respondent(respondent_id)
             );
         """)
         conn.commit()
@@ -42,7 +42,7 @@ def main():
         create_table(conn)
         insert_data(conn)
         conn.close()
-        print("\nFinished building the PostgreSQL Weather_Station table")
+        print("\nFinished building the PostgreSQL weather_station table")
     except psycopg2.Error as e:
         print(f"Database error: {e}")
         raise

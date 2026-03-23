@@ -6,7 +6,7 @@ from db_connect import get_connection
 Will Gillette
 Build PostgreSQL Date_Dimension table
 """
-TABLE_NAME = "Date_Dimension"
+TABLE_NAME = "date_dimension"
 
 def get_season(month):
     # Return season based on month
@@ -70,7 +70,7 @@ def main():
         create_table(conn)
         insert_data(conn)
         conn.close()
-        print("\nFinished building the PostgreSQL Date_Dimension table")
+        print("\nFinished building the PostgreSQL date_dimension table")
     except psycopg2.Error as e:
         print(f"Database error: {e}")
         raise

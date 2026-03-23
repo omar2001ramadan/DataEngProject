@@ -9,7 +9,7 @@ Build PostgreSQL Daily_Solar_Timing table from solar timing data
 
 DATA_FILE1 = data_file("sunrise_sunset_CISO.csv")
 DATA_FILE2 = data_file("sunrise_sunset_ERCO.csv")
-TABLE_NAME = "Daily_Solar_Timing"
+TABLE_NAME = "daily_solar_timing"
 
 def create_table(conn):
     """Create Daily_Solar_Timing table"""
@@ -30,8 +30,8 @@ def create_table(conn):
                 nautical_twilight_end TIMESTAMP,
                 astronomical_twilight_begin TIMESTAMP,
                 astronomical_twilight_end TIMESTAMP,
-                FOREIGN KEY (respondent_id) REFERENCES Respondent(respondent_id),
-                FOREIGN KEY (date_id) REFERENCES Date_Dimension(date_id)
+                FOREIGN KEY (respondent_id) REFERENCES respondent(respondent_id),
+                FOREIGN KEY (date_id) REFERENCES date_dimension(date_id)
             );
         """)
         conn.commit()
@@ -76,7 +76,7 @@ def main():
         create_table(conn)
         insert_data(conn)
         conn.close()
-        print("\nFinished building the PostgreSQL Daily_Solar_Timing table")
+        print("\nFinished building the PostgreSQL daily_solar_timing table")
     except psycopg2.Error as e:
         print(f"Database error: {e}")
         raise

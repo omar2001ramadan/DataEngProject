@@ -6,7 +6,7 @@ Will Gillette
 build PostgreSQL Solar_Generation table from the EIA solar data CSV
 """
 DATA_FILE = data_file("eia_solar_hourly.csv")
-TABLE_NAME = "Solar_Generation"
+TABLE_NAME = "solar_generation"
 
 def create_table(conn):
     # create a solar generation table using burch's schema
@@ -14,9 +14,9 @@ def create_table(conn):
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
                 generation_id SERIAL PRIMARY KEY,
-                respondent_id VARCHAR(10) NOT NULL REFERENCES Respondent(respondent_id),
+                respondent_id VARCHAR(10) NOT NULL REFERENCES respondent(respondent_id),
                 period TIMESTAMP NOT NULL,
-                date_id DATE NOT NULL REFERENCES Date_Dimension(date_id),
+                date_id DATE NOT NULL REFERENCES date_dimension(date_id),
                 value_mwh DECIMAL(15, 3) NOT NULL
             );
         """)
@@ -28,6 +28,9 @@ def insert_data(conn):
     df = pd.read_csv(DATA_FILE)
     # convert period to datetime if not already
     df["period"] = pd.to_datetime(df["period"])
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
+    # remove rows with missing values
+    df = df.dropna(subset=["period", "respondent", "value"])
     with conn.cursor() as cur:
         for _, row in df.iterrows():
             cur.execute(f"""
@@ -43,7 +46,7 @@ def main():
         create_table(conn)
         insert_data(conn)
         conn.close()
-        print("\nFinished building the PostgreSQL Solar_Generation table")
+        print("\nFinished building the PostgreSQL solar_generation table")
     except psycopg2.Error as e:
         print(f"Database error: {e}")
         raise

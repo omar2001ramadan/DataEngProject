@@ -53,14 +53,14 @@ create_view_sql = f"""
         -- Solar Generation
         sg.period,
         sg.value_mwh
-    FROM Weather_Observation wo
-    INNER JOIN Weather_Station ws ON wo.station_id = ws.station_id
-    INNER JOIN Respondent r ON ws.respondent_id = r.respondent_id
-    INNER JOIN Date_Dimension dd ON wo.date_id = dd.date_id
-    LEFT JOIN Daily_Solar_Timing dst
+    FROM weather_observation wo
+    INNER JOIN weather_station ws ON wo.station_id = ws.station_id
+    INNER JOIN respondent r ON ws.respondent_id = r.respondent_id
+    INNER JOIN date_dimension dd ON wo.date_id = dd.date_id
+    LEFT JOIN daily_solar_timing dst
         ON r.respondent_id = dst.respondent_id
         AND dd.date_id = dst.date_id
-    LEFT JOIN Solar_Generation sg
+    LEFT JOIN solar_generation sg
         ON r.respondent_id = sg.respondent_id
         AND dd.date_id = sg.date_id;
 """

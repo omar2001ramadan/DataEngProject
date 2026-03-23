@@ -53,10 +53,10 @@ def solar_hourly():
             w.dry_bulb_temp_c AS temperature,
             w.relative_humidity_pct AS humidity,
             w.wind_speed_kmh AS wind_speed
-        FROM "Solar_Generation" s
-        JOIN "Respondent" r ON s.respondent_id = r.respondent_id
-        LEFT JOIN "Weather_Station" ws ON ws.respondent_id = r.respondent_id
-        LEFT JOIN "Weather_Observation" w
+        FROM solar_generation s
+        JOIN respondent r ON s.respondent_id = r.respondent_id
+        LEFT JOIN weather_station ws ON ws.respondent_id = r.respondent_id
+        LEFT JOIN weather_observation w
             ON w.station_id = ws.station_id
             AND DATE(s.period) = DATE(w.observation_datetime)
             AND EXTRACT(HOUR FROM s.period) = EXTRACT(HOUR FROM w.observation_datetime)
@@ -68,7 +68,7 @@ def solar_hourly():
 
     # Get sunrise/sunset for that day
     sun_query = text("""
-        SELECT t.sunrise, t.sunset FROM "Daily_Solar_Timing" t
+        SELECT t.sunrise, t.sunset FROM daily_solar_timing t
         WHERE t.respondent_id = :region AND t.date = :date
     """)
     sun = db.session.execute(sun_query, {"region": region, "date": date}).mappings().first()

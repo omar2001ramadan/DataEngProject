@@ -6,7 +6,7 @@ Will Gillette
 Build PostgreSQL Respondent table from the EIA respondent data CSV
 """
 DATA_FILE = data_file("respondent.csv")
-TABLE_NAME = "Respondent"
+TABLE_NAME = "respondent"
 
 def create_table(conn):
     # create respondent table
@@ -40,7 +40,7 @@ def main():
         create_table(conn)
         insert_data(conn)
         conn.close()
-        print("\nFinished building the PostgreSQL Respondent table")
+        print("\nFinished building the PostgreSQL respondent table")
     except psycopg2.Error as e:
         print(f"Database error: {e}")
         raise

@@ -55,6 +55,28 @@ This will:
 
 The API is available at [http://localhost:5000/api/health](http://localhost:5000/api/health)
 
+## Database Schema
+
+The pipeline creates the following tables in PostgreSQL:
+
+| Table | Description |
+|---|---|
+| `date_dimension` | Lookup table for date attributes (day of week, month, season, quarter, weekend flag) covering 2000-2030 |
+| `respondent` | Grid region metadata (CISO and ERCO) with name and coordinates |
+| `weather_station` | NOAA weather station details (name, location) linked to a respondent |
+| `solar_generation` | Hourly solar generation in MWh from the EIA, linked to a respondent and date |
+| `weather_observation` | Hourly weather readings (temperature, humidity, wind, pressure, visibility, precipitation, sky conditions) linked to a station and date |
+| `daily_solar_timing` | Daily sunrise/sunset times, solar noon, day length, and twilight times for each respondent |
+
+The pipeline also creates two materialized views used by the API:
+
+| View | Description |
+|---|---|
+| `daily_summary` | Aggregates solar generation, weather, and daylight data per region per day |
+| `monthly_summary` | Rolls up daily_summary into monthly totals and averages |
+
+A merged view (`merged_weather_solar_view`) joins all six tables for ad-hoc analysis.
+
 ## API Endpoints
 
 | Endpoint | Description |

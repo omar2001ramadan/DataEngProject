@@ -6,7 +6,7 @@ Will Gillette
 Build PostgreSQL Weather_Observation table from weather data CSV
 """
 DATA_FILE = data_file("weather_observation.csv")
-TABLE_NAME = "Weather_Observation"
+TABLE_NAME = "weather_observation"
 
 def create_table(conn):
     # create weather observation table
@@ -29,8 +29,8 @@ def create_table(conn):
                 visibility_km DECIMAL(6, 2),
                 station_pressure_hpa DECIMAL(7, 2),
                 altimeter_setting_hpa DECIMAL(7, 2),
-                FOREIGN KEY (station_id) REFERENCES Weather_Station(station_id),
-                FOREIGN KEY (date_id) REFERENCES Date_Dimension(date_id)
+                FOREIGN KEY (station_id) REFERENCES weather_station(station_id),
+                FOREIGN KEY (date_id) REFERENCES date_dimension(date_id)
             );
         """)
         conn.commit()
@@ -62,7 +62,7 @@ def main():
         create_table(conn)
         insert_data(conn)
         conn.close()
-        print("\nFinished building the PostgreSQL Weather_Observation table")
+        print("\nFinished building the PostgreSQL weather_observation table")
     except psycopg2.Error as e:
         print(f"Database error: {e}")
         raise

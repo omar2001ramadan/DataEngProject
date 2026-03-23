@@ -31,12 +31,12 @@ def drop_all_tables():
         cur.execute("DROP MATERIALIZED VIEW IF EXISTS monthly_summary CASCADE")
         cur.execute("DROP MATERIALIZED VIEW IF EXISTS daily_summary CASCADE")
         cur.execute("DROP VIEW IF EXISTS merged_weather_solar_view CASCADE")
-        cur.execute("DROP TABLE IF EXISTS Solar_Generation CASCADE")
-        cur.execute("DROP TABLE IF EXISTS Weather_Observation CASCADE")
-        cur.execute("DROP TABLE IF EXISTS Daily_Solar_Timing CASCADE")
-        cur.execute("DROP TABLE IF EXISTS Weather_Station CASCADE")
-        cur.execute("DROP TABLE IF EXISTS Respondent CASCADE")
-        cur.execute("DROP TABLE IF EXISTS Date_Dimension CASCADE")
+        cur.execute("DROP TABLE IF EXISTS solar_generation CASCADE")
+        cur.execute("DROP TABLE IF EXISTS weather_observation CASCADE")
+        cur.execute("DROP TABLE IF EXISTS daily_solar_timing CASCADE")
+        cur.execute("DROP TABLE IF EXISTS weather_station CASCADE")
+        cur.execute("DROP TABLE IF EXISTS respondent CASCADE")
+        cur.execute("DROP TABLE IF EXISTS date_dimension CASCADE")
     conn.close()
     print("  All tables dropped.")
 
@@ -61,14 +61,14 @@ def create_materialized_views():
                 MIN(t.day_length_sec) AS day_length_seconds,
                 MIN(t.sunrise) AS sunrise,
                 MIN(t.sunset) AS sunset
-            FROM Solar_Generation s
-            JOIN Respondent r ON s.respondent_id = r.respondent_id
-            LEFT JOIN Weather_Station ws ON ws.respondent_id = r.respondent_id
-            LEFT JOIN Weather_Observation w
+            FROM solar_generation s
+            JOIN respondent r ON s.respondent_id = r.respondent_id
+            LEFT JOIN weather_station ws ON ws.respondent_id = r.respondent_id
+            LEFT JOIN weather_observation w
                 ON w.station_id = ws.station_id
                 AND DATE(s.period) = DATE(w.observation_datetime)
                 AND EXTRACT(HOUR FROM s.period) = EXTRACT(HOUR FROM w.observation_datetime)
-            LEFT JOIN Daily_Solar_Timing t
+            LEFT JOIN daily_solar_timing t
                 ON t.respondent_id = r.respondent_id
                 AND DATE(s.period) = t.date
             GROUP BY r.respondent_id, DATE(s.period)
@@ -136,8 +136,8 @@ def main():
     # Summary
     print("\nIngestion complete!")
     with engine.connect() as conn:
-        for table in ['Date_Dimension', 'Respondent', 'Weather_Station',
-                       'Solar_Generation', 'Weather_Observation', 'Daily_Solar_Timing',
+        for table in ['date_dimension', 'respondent', 'weather_station',
+                       'solar_generation', 'weather_observation', 'daily_solar_timing',
                        'daily_summary', 'monthly_summary']:
             count = conn.execute(text(f'SELECT COUNT(*) FROM {table}')).scalar()
             print(f"  {table}: {count:,} rows")

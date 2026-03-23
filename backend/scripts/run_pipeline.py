@@ -37,7 +37,7 @@ RESPONDENTS = ["CISO", "ERCO"]
 def get_latest_solar_period():
     """Get the most recent solar generation timestamp in the database."""
     with engine.connect() as conn:
-        result = conn.execute(text("SELECT MAX(period) FROM Solar_Generation")).scalar()
+        result = conn.execute(text("SELECT MAX(period) FROM solar_generation")).scalar()
     return result
 
 
@@ -111,7 +111,7 @@ def pull_fresh_solar():
     df["value_mwh"] = df["value"]
     df = df[["respondent_id", "period", "date_id", "value_mwh"]].dropna()
 
-    df.to_sql("Solar_Generation", engine, if_exists="append", index=False, method="multi", chunksize=5000)
+    df.to_sql("solar_generation", engine, if_exists="append", index=False, method="multi", chunksize=5000)
     print(f"  Inserted {len(df)} new solar rows.")
     return len(df)
 
@@ -121,7 +121,7 @@ def pull_fresh_solar():
 def get_latest_timing_date(respondent_id):
     with engine.connect() as conn:
         result = conn.execute(
-            text("SELECT MAX(date) FROM Daily_Solar_Timing WHERE respondent_id = :rid"),
+            text("SELECT MAX(date) FROM daily_solar_timing WHERE respondent_id = :rid"),
             {"rid": respondent_id}
         ).scalar()
     return result
@@ -199,7 +199,7 @@ def pull_fresh_timing():
 
         if rows:
             df = pd.DataFrame(rows)
-            df.to_sql("Daily_Solar_Timing", engine, if_exists="append", index=False, method="multi")
+            df.to_sql("daily_solar_timing", engine, if_exists="append", index=False, method="multi")
             print(f"  Inserted {len(df)} new timing rows for {respondent_id}.")
             total_inserted += len(df)
 
@@ -248,8 +248,8 @@ def main():
     print("\n" + "=" * 50)
     print("Pipeline complete!")
     with engine.connect() as conn:
-        for table in ['Date_Dimension', 'Respondent', 'Weather_Station',
-                       'Solar_Generation', 'Weather_Observation', 'Daily_Solar_Timing',
+        for table in ['date_dimension', 'respondent', 'weather_station',
+                       'solar_generation', 'weather_observation', 'daily_solar_timing',
                        'daily_summary', 'monthly_summary']:
             count = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
             print(f"  {table}: {count:,} rows")

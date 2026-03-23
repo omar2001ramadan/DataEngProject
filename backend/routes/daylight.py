@@ -27,7 +27,7 @@ def daylight():
             t.sunset,
             t.day_length_sec,
             ds.total_mwh
-        FROM "Daily_Solar_Timing" t
+        FROM daily_solar_timing t
         LEFT JOIN daily_summary ds
             ON t.respondent_id = ds.region AND t.date = ds.date
         WHERE {" AND ".join(where)}

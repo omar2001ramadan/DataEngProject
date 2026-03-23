@@ -4,7 +4,7 @@ db = SQLAlchemy()
 
 
 class DateDimension(db.Model):
-    __tablename__ = "Date_Dimension"
+    __tablename__ = "date_dimension"
     date_id = db.Column(db.Date, primary_key=True)
     day_of_week = db.Column(db.String(10))
     month = db.Column(db.Integer)
@@ -16,7 +16,7 @@ class DateDimension(db.Model):
 
 
 class Respondent(db.Model):
-    __tablename__ = "Respondent"
+    __tablename__ = "respondent"
     respondent_id = db.Column(db.String(10), primary_key=True)
     respondent_name = db.Column(db.String(255), nullable=False)
     region_latitude = db.Column(db.Float)
@@ -28,30 +28,30 @@ class Respondent(db.Model):
 
 
 class WeatherStation(db.Model):
-    __tablename__ = "Weather_Station"
+    __tablename__ = "weather_station"
     station_id = db.Column(db.String(50), primary_key=True)
     station_name = db.Column(db.String(255), nullable=False)
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
-    respondent_id = db.Column(db.String(10), db.ForeignKey("Respondent.respondent_id"), nullable=False, index=True)
+    respondent_id = db.Column(db.String(10), db.ForeignKey("respondent.respondent_id"), nullable=False, index=True)
 
     observations = db.relationship("WeatherObservation", backref="station")
 
 
 class SolarGeneration(db.Model):
-    __tablename__ = "Solar_Generation"
+    __tablename__ = "solar_generation"
     generation_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    respondent_id = db.Column(db.String(10), db.ForeignKey("Respondent.respondent_id"), nullable=False, index=True)
+    respondent_id = db.Column(db.String(10), db.ForeignKey("respondent.respondent_id"), nullable=False, index=True)
     period = db.Column(db.DateTime, nullable=False, index=True)
-    date_id = db.Column(db.Date, db.ForeignKey("Date_Dimension.date_id"), nullable=False)
+    date_id = db.Column(db.Date, db.ForeignKey("date_dimension.date_id"), nullable=False)
     value_mwh = db.Column(db.Float, nullable=False)
 
 
 class WeatherObservation(db.Model):
-    __tablename__ = "Weather_Observation"
+    __tablename__ = "weather_observation"
     observation_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    station_id = db.Column(db.String(50), db.ForeignKey("Weather_Station.station_id"), index=True)
-    date_id = db.Column(db.Date, db.ForeignKey("Date_Dimension.date_id"))
+    station_id = db.Column(db.String(50), db.ForeignKey("weather_station.station_id"), index=True)
+    date_id = db.Column(db.Date, db.ForeignKey("date_dimension.date_id"))
     observation_datetime = db.Column(db.DateTime, index=True)
     dry_bulb_temp_c = db.Column(db.Float)
     dew_point_temp_c = db.Column(db.Float)
@@ -68,10 +68,10 @@ class WeatherObservation(db.Model):
 
 
 class DailySolarTiming(db.Model):
-    __tablename__ = "Daily_Solar_Timing"
+    __tablename__ = "daily_solar_timing"
     timing_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    respondent_id = db.Column(db.String(10), db.ForeignKey("Respondent.respondent_id"), nullable=False, index=True)
-    date_id = db.Column(db.Date, db.ForeignKey("Date_Dimension.date_id"))
+    respondent_id = db.Column(db.String(10), db.ForeignKey("respondent.respondent_id"), nullable=False, index=True)
+    date_id = db.Column(db.Date, db.ForeignKey("date_dimension.date_id"))
     date = db.Column(db.Date, nullable=False, index=True)
     sunrise = db.Column(db.DateTime)
     sunset = db.Column(db.DateTime)
