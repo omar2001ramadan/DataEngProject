@@ -150,7 +150,7 @@ def load_weather(station_map):
 
     total = 0
     for region_code, filename in [("CISO", "weather_CISO.csv"), ("ERCO", "weather_ERCO.csv")]:
-        df = pd.read_csv(os.path.join(DATA_DIR, filename))
+        df = pd.read_csv(os.path.join(DATA_DIR, filename), low_memory=False)
         df["station_id"] = station_map[region_code]
         df["hour"] = pd.to_datetime(df["DATE"]).dt.floor("h")
         df["temperature"] = pd.to_numeric(df["HourlyDryBulbTemperature"], errors="coerce")
@@ -200,7 +200,7 @@ def load_sunrise_sunset(region_map):
 
     total = 0
     for region_code, filename in [("CISO", "sunrise_sunset_CISO.csv"), ("ERCO", "sunrise_sunset_ERCO.csv")]:
-        df = pd.read_csv(os.path.join(DATA_DIR, filename))
+        df = pd.read_csv(os.path.join(DATA_DIR, filename), low_memory=False)
         df["region_id"] = region_map[region_code]
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["sunrise"] = pd.to_datetime(df["sunrise"])
