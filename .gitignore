@@ -9,6 +9,7 @@ venv/
 .venv/
 env/
 ds_env
+.backend-local-venv/
 
 # Node
 node_modules/
