@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Line, Legend
+  Tooltip, ResponsiveContainer, Legend,
+  AreaChart, Area, Brush
 } from "recharts";
 import { fetchCorrelationWeather, fetchCorrelationDaylight } from "../api/client";
 import RegionSelector from "../components/filters/RegionSelector";
@@ -11,50 +12,108 @@ import DateRangePicker from "../components/filters/DateRangePicker";
 export default function Correlation() {
   const [region, setRegion] = useState("CISO");
   const [metric, setMetric] = useState("temperature");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
   const [weatherData, setWeatherData] = useState(null);
   const [daylightData, setDaylightData] = useState(null);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [brushKey, setBrushKey] = useState(0);
   const [loading, setLoading] = useState(true);
+  const brushRef = useRef({ startIndex: 0, endIndex: 0 });
 
   useEffect(() => {
     setLoading(true);
-    const params = { region };
-    if (startDate) params.start_date = startDate;
-    if (endDate) params.end_date = endDate;
-
     Promise.all([
-      fetchCorrelationWeather({ ...params, metric }),
-      fetchCorrelationDaylight(params),
+      fetchCorrelationWeather({ region, metric }),
+      fetchCorrelationDaylight({ region }),
     ]).then(([wd, dl]) => {
       setWeatherData(wd);
       setDaylightData(dl);
+      if (wd && wd.data.length > 0) {
+        setStartDate(wd.data[0].date);
+        setEndDate(wd.data[wd.data.length - 1].date);
+        brushRef.current = { startIndex: 0, endIndex: wd.data.length - 1 };
+      }
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, [region, metric, startDate, endDate]);
+  }, [region, metric]);
+
+  const timelineData = useMemo(() => {
+    if (!weatherData) return [];
+    return weatherData.data.map((d) => ({ date: d.date, solar_mwh: d.solar_mwh }));
+  }, [weatherData]);
+
+  const handleBrushChange = (range) => {
+    if (range && timelineData.length > 0) {
+      brushRef.current = range;
+      setStartDate(timelineData[range.startIndex].date);
+      setEndDate(timelineData[range.endIndex].date);
+    }
+  };
+
+  const handleStartDateChange = (val) => {
+    setStartDate(val);
+    const idx = timelineData.findIndex((d) => d.date >= val);
+    if (idx >= 0) {
+      brushRef.current = { ...brushRef.current, startIndex: idx };
+      setBrushKey((k) => k + 1);
+    }
+  };
+
+  const handleEndDateChange = (val) => {
+    setEndDate(val);
+    let idx = timelineData.length - 1;
+    for (let i = timelineData.length - 1; i >= 0; i--) {
+      if (timelineData[i].date <= val) { idx = i; break; }
+    }
+    brushRef.current = { ...brushRef.current, endIndex: idx };
+    setBrushKey((k) => k + 1);
+  };
+
+  // Filter data to brush range
+  const filteredWeather = useMemo(() => {
+    if (!weatherData) return [];
+    return weatherData.data.filter((d) => d.date >= startDate && d.date <= endDate);
+  }, [weatherData, startDate, endDate]);
+
+  const filteredDaylight = useMemo(() => {
+    if (!daylightData) return [];
+    return daylightData.data.filter((d) => d.date >= startDate && d.date <= endDate);
+  }, [daylightData, startDate, endDate]);
+
+  // Compute trendlines for filtered data
+  const computeTrend = (data, xKey, yKey) => {
+    if (data.length < 3) return { slope: 0, intercept: 0, r_squared: null, trend: [] };
+    const x = data.map((d) => d[xKey]);
+    const y = data.map((d) => d[yKey]);
+    const n = x.length;
+    const sumX = x.reduce((a, b) => a + b, 0);
+    const sumY = y.reduce((a, b) => a + b, 0);
+    const sumXY = x.reduce((a, b, i) => a + b * y[i], 0);
+    const sumX2 = x.reduce((a, b) => a + b * b, 0);
+    const sumY2 = y.reduce((a, b) => a + b * b, 0);
+    const denom = (n * sumX2 - sumX ** 2) * (n * sumY2 - sumY ** 2);
+    let slope = 0, intercept = 0, r_squared = null;
+    if (denom > 0) {
+      const r = (n * sumXY - sumX * sumY) / Math.sqrt(denom);
+      r_squared = Math.round(r * r * 10000) / 10000;
+      slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX ** 2);
+      intercept = (sumY - slope * sumX) / n;
+    }
+    const min = Math.min(...x);
+    const max = Math.max(...x);
+    return {
+      slope, intercept, r_squared,
+      trend: [
+        { [xKey]: min, [yKey]: slope * min + intercept },
+        { [xKey]: max, [yKey]: slope * max + intercept },
+      ],
+    };
+  };
+
+  const weatherTrend = useMemo(() => computeTrend(filteredWeather, "metric_value", "solar_mwh"), [filteredWeather]);
+  const daylightTrend = useMemo(() => computeTrend(filteredDaylight, "day_length_hours", "solar_mwh"), [filteredDaylight]);
 
   if (loading) return <div className="loading">Loading correlation data...</div>;
-
-  // Generate trendline data
-  const weatherTrend = weatherData ? (() => {
-    const vals = weatherData.data.map((d) => d.metric_value);
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
-    return [
-      { metric_value: min, solar_mwh: weatherData.slope * min + weatherData.intercept },
-      { metric_value: max, solar_mwh: weatherData.slope * max + weatherData.intercept },
-    ];
-  })() : [];
-
-  const daylightTrend = daylightData ? (() => {
-    const vals = daylightData.data.map((d) => d.day_length_hours);
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
-    return [
-      { day_length_hours: min, solar_mwh: daylightData.slope * min + daylightData.intercept },
-      { day_length_hours: max, solar_mwh: daylightData.slope * max + daylightData.intercept },
-    ];
-  })() : [];
 
   return (
     <div className="page">
@@ -64,15 +123,32 @@ export default function Correlation() {
         <MetricSelector value={metric} onChange={setMetric} />
         <DateRangePicker
           startDate={startDate} endDate={endDate}
-          onStartChange={setStartDate} onEndChange={setEndDate}
+          onStartChange={handleStartDateChange} onEndChange={handleEndDateChange}
         />
       </div>
 
-      {weatherData && (
+      {timelineData.length > 0 && (
+        <ResponsiveContainer width="100%" height={80}>
+          <AreaChart data={timelineData}>
+            <YAxis hide domain={["dataMin", "dataMax"]} />
+            <Area type="monotone" dataKey="solar_mwh" stroke="#f59e0b" fill="#fbbf24" fillOpacity={0.3} />
+            <Brush
+              key={brushKey}
+              dataKey="date" height={30} stroke="#8884d8"
+              tickFormatter={(d) => d.slice(5)}
+              startIndex={brushRef.current.startIndex}
+              endIndex={brushRef.current.endIndex}
+              onChange={handleBrushChange}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      )}
+
+      {filteredWeather.length > 0 && (
         <>
           <h2>
             Solar vs {metric.replace("_", " ")}
-            <span className="r-squared"> (R² = {weatherData.r_squared ?? "N/A"})</span>
+            <span className="r-squared"> (R² = {weatherTrend.r_squared ?? "N/A"})</span>
           </h2>
           <ResponsiveContainer width="100%" height={400}>
             <ScatterChart>
@@ -81,18 +157,18 @@ export default function Correlation() {
               <YAxis dataKey="solar_mwh" name="Solar (MWh)" type="number" />
               <Tooltip cursor={{ strokeDasharray: "3 3" }} />
               <Legend />
-              <Scatter name="Daily Data" data={weatherData.data} fill="#f59e0b" opacity={0.5} />
-              <Scatter name="Trend" data={weatherTrend} fill="none" line={{ stroke: "#ef4444", strokeWidth: 2 }} shape={() => null} />
+              <Scatter name="Daily Data" data={filteredWeather} fill="#f59e0b" opacity={0.5} />
+              <Scatter name="Trend" data={weatherTrend.trend} fill="none" line={{ stroke: "#ef4444", strokeWidth: 2 }} shape={() => null} />
             </ScatterChart>
           </ResponsiveContainer>
         </>
       )}
 
-      {daylightData && (
+      {filteredDaylight.length > 0 && (
         <>
           <h2>
             Solar vs Daylight Hours
-            <span className="r-squared"> (R² = {daylightData.r_squared ?? "N/A"})</span>
+            <span className="r-squared"> (R² = {daylightTrend.r_squared ?? "N/A"})</span>
           </h2>
           <ResponsiveContainer width="100%" height={400}>
             <ScatterChart>
@@ -101,8 +177,8 @@ export default function Correlation() {
               <YAxis dataKey="solar_mwh" name="Solar (MWh)" type="number" />
               <Tooltip cursor={{ strokeDasharray: "3 3" }} />
               <Legend />
-              <Scatter name="Daily Data" data={daylightData.data} fill="#3b82f6" opacity={0.5} />
-              <Scatter name="Trend" data={daylightTrend} fill="none" line={{ stroke: "#ef4444", strokeWidth: 2 }} shape={() => null} />
+              <Scatter name="Daily Data" data={filteredDaylight} fill="#3b82f6" opacity={0.5} />
+              <Scatter name="Trend" data={daylightTrend.trend} fill="none" line={{ stroke: "#ef4444", strokeWidth: 2 }} shape={() => null} />
             </ScatterChart>
           </ResponsiveContainer>
         </>

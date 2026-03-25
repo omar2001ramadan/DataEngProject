@@ -1,49 +1,85 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend
+  Tooltip, ResponsiveContainer, Legend, Brush
 } from "recharts";
 import { fetchSolarComparison } from "../api/client";
-import DateRangePicker from "../components/filters/DateRangePicker";
 
 export default function Compare() {
+  const [allData, setAllData] = useState([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [data, setData] = useState([]);
+  const [brushKey, setBrushKey] = useState(0);
   const [loading, setLoading] = useState(true);
+  const brushRef = useRef({ startIndex: 0, endIndex: 0 });
 
   useEffect(() => {
     setLoading(true);
-    const params = {};
-    if (startDate) params.start_date = startDate;
-    if (endDate) params.end_date = endDate;
-    fetchSolarComparison(params)
+    fetchSolarComparison({})
       .then((d) => {
-        setData(d.map((r) => ({ ...r, label: r.month.slice(0, 7) })));
+        const mapped = d.map((r) => ({ ...r, label: r.month.slice(0, 7) }));
+        setAllData(mapped);
+        if (mapped.length > 0) {
+          setStartDate(mapped[0].label);
+          setEndDate(mapped[mapped.length - 1].label);
+          brushRef.current = { startIndex: 0, endIndex: mapped.length - 1 };
+        }
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [startDate, endDate]);
+  }, []);
+
+  const handleBrushChange = (range) => {
+    if (range && allData.length > 0) {
+      brushRef.current = range;
+      setStartDate(allData[range.startIndex].label);
+      setEndDate(allData[range.endIndex].label);
+    }
+  };
+
+  const handleStartDateChange = (val) => {
+    setStartDate(val);
+    const idx = allData.findIndex((d) => d.label >= val);
+    if (idx >= 0) {
+      brushRef.current = { ...brushRef.current, startIndex: idx };
+      setBrushKey((k) => k + 1);
+    }
+  };
+
+  const handleEndDateChange = (val) => {
+    setEndDate(val);
+    let idx = allData.length - 1;
+    for (let i = allData.length - 1; i >= 0; i--) {
+      if (allData[i].label <= val) { idx = i; break; }
+    }
+    brushRef.current = { ...brushRef.current, endIndex: idx };
+    setBrushKey((k) => k + 1);
+  };
+
+  const visibleData = useMemo(() => {
+    return allData.slice(brushRef.current.startIndex, brushRef.current.endIndex + 1);
+  }, [allData, startDate, endDate]);
 
   if (loading) return <div className="loading">Loading comparison data...</div>;
 
-  // Summary stats
-  const cisoTotal = data.reduce((s, r) => s + (r.ciso_total_mwh || 0), 0);
-  const ercoTotal = data.reduce((s, r) => s + (r.erco_total_mwh || 0), 0);
+  const cisoTotal = visibleData.reduce((s, r) => s + (r.ciso_total_mwh || 0), 0);
+  const ercoTotal = visibleData.reduce((s, r) => s + (r.erco_total_mwh || 0), 0);
 
   return (
     <div className="page">
       <h1>Region Comparison</h1>
       <div className="filters">
-        <DateRangePicker
-          startDate={startDate} endDate={endDate}
-          onStartChange={setStartDate} onEndChange={setEndDate}
-        />
+        <div className="date-range-picker">
+          <label>From</label>
+          <input type="text" value={startDate} placeholder="YYYY-MM" size="8" onChange={(e) => handleStartDateChange(e.target.value)} />
+          <label>To</label>
+          <input type="text" value={endDate} placeholder="YYYY-MM" size="8" onChange={(e) => handleEndDateChange(e.target.value)} />
+        </div>
       </div>
 
-      <h2>Monthly Generation — CISO vs ERCO</h2>
+      <h2>Monthly Generation - CISO vs ERCO</h2>
       <ResponsiveContainer width="100%" height={400}>
-        <BarChart data={data}>
+        <BarChart data={allData}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="label" />
           <YAxis />
@@ -51,6 +87,13 @@ export default function Compare() {
           <Legend />
           <Bar dataKey="ciso_total_mwh" fill="#f59e0b" name="California (CISO)" />
           <Bar dataKey="erco_total_mwh" fill="#3b82f6" name="Texas (ERCO)" />
+          <Brush
+            key={brushKey}
+            dataKey="label" height={30} stroke="#8884d8"
+            startIndex={brushRef.current.startIndex}
+            endIndex={brushRef.current.endIndex}
+            onChange={handleBrushChange}
+          />
         </BarChart>
       </ResponsiveContainer>
 
@@ -71,20 +114,20 @@ export default function Compare() {
           </tr>
           <tr>
             <td>Avg Monthly</td>
-            <td>{data.length ? Math.round(cisoTotal / data.length).toLocaleString() : "—"} MWh</td>
-            <td>{data.length ? Math.round(ercoTotal / data.length).toLocaleString() : "—"} MWh</td>
+            <td>{visibleData.length ? Math.round(cisoTotal / visibleData.length).toLocaleString() : "-"} MWh</td>
+            <td>{visibleData.length ? Math.round(ercoTotal / visibleData.length).toLocaleString() : "-"} MWh</td>
           </tr>
           <tr>
             <td>Peak Month</td>
             <td>
-              {data.length
-                ? data.reduce((best, r) => (r.ciso_total_mwh || 0) > (best.ciso_total_mwh || 0) ? r : best, data[0]).label
-                : "—"}
+              {visibleData.length
+                ? visibleData.reduce((best, r) => (r.ciso_total_mwh || 0) > (best.ciso_total_mwh || 0) ? r : best, visibleData[0]).label
+                : "-"}
             </td>
             <td>
-              {data.length
-                ? data.reduce((best, r) => (r.erco_total_mwh || 0) > (best.erco_total_mwh || 0) ? r : best, data[0]).label
-                : "—"}
+              {visibleData.length
+                ? visibleData.reduce((best, r) => (r.erco_total_mwh || 0) > (best.erco_total_mwh || 0) ? r : best, visibleData[0]).label
+                : "-"}
             </td>
           </tr>
         </tbody>

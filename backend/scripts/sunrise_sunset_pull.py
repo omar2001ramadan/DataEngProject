@@ -1,8 +1,7 @@
 """
+Sanbir Rahman
 Pull daily sunrise/sunset data for CISO and ERCO solar regions
 using the Sunrise-Sunset API (https://sunrise-sunset.org/api).
-
-Produces one CSV per site.
 """
 
 import requests
@@ -16,8 +15,6 @@ SITES = {
     "ERCO": {"lat": 31.8, "lng": -99.4, "desc": "ERCOT Texas (central TX solar region)"},
 }
 
-START_DATE = date(2021, 2, 25)
-END_DATE = date(2026, 2, 25)
 REQUEST_DELAY = 0.5  # seconds between requests
 
 FIELDS = [
@@ -46,40 +43,8 @@ def fetch_day(lat, lng, dt):
     return None
 
 
-def pull_site(name, lat, lng):
-    total_days = (END_DATE - START_DATE).days + 1
-    outfile = f"sunrise_sunset_{name}.csv"
-
-    with open(outfile, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDS)
-        writer.writeheader()
-
-        current = START_DATE
-        day_num = 0
-        while current <= END_DATE:
-            result = fetch_day(lat, lng, current)
-            if result:
-                row = {"date": current.isoformat()}
-                for key in FIELDS[1:]:
-                    row[key] = result.get(key, "")
-                writer.writerow(row)
-            else:
-                print(f"  WARNING: No data for {current}")
-
-            day_num += 1
-            if day_num % 100 == 0:
-                print(f"  {name}: {day_num:,} / {total_days:,} days fetched")
-
-            current += timedelta(days=1)
-            time.sleep(REQUEST_DELAY)
-
-    print(f"  {name}: Done — saved {day_num:,} days to {outfile}")
-
-
-def clean_site_csv(filename):
-    """Apply cleaning to a pulled CSV: type conversion, null/duplicate removal."""
-    df = pd.read_csv(filename)
-
+def clean(df):
+    """Apply cleaning: type conversion, null/duplicate removal, validation."""
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
     time_cols = ["sunrise", "sunset", "solar_noon",
@@ -102,16 +67,59 @@ def clean_site_csv(filename):
     df = df.drop_duplicates(subset=["date"])
 
     df = df.sort_values("date").reset_index(drop=True)
-    df.to_csv(filename, index=False)
-    print(f"  Cleaned {filename}: {len(df)} rows")
+    return df
+
+
+def pull_date_range(respondent_id, start_dt, end_dt):
+    """Pull and clean sunrise/sunset data for one region and date range.
+
+    Args:
+        respondent_id: Region code ("CISO" or "ERCO")
+        start_dt: Start date (datetime.date)
+        end_dt: End date (datetime.date)
+
+    Returns:
+        Cleaned DataFrame with sunrise/sunset fields
+    """
+    if respondent_id not in SITES:
+        raise ValueError(f"Unknown respondent: {respondent_id}")
+
+    coords = SITES[respondent_id]
+    days_needed = (end_dt - start_dt).days + 1
+    print(f"  Pulling {days_needed} days of sunrise/sunset for {respondent_id}...")
+
+    records = []
+    current = start_dt
+    while current <= end_dt:
+        result = fetch_day(coords["lat"], coords["lng"], current)
+        if result:
+            row = {"date": current.isoformat()}
+            for key in FIELDS[1:]:
+                row[key] = result.get(key, "")
+            records.append(row)
+        current += timedelta(days=1)
+        time.sleep(REQUEST_DELAY)
+
+    if not records:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(records)
+    return clean(df)
 
 
 def main():
+    """Pull full dataset and save to CSV per site."""
+    start_dt = date(2021, 2, 25)
+    end_dt = date(2026, 2, 25)
+
     for name, info in SITES.items():
         print(f"\nPulling sunrise/sunset for {name} ({info['desc']})...")
         print(f"  Coordinates: {info['lat']}, {info['lng']}")
-        pull_site(name, info["lat"], info["lng"])
-        clean_site_csv(f"sunrise_sunset_{name}.csv")
+        df = pull_date_range(name, start_dt, end_dt)
+
+        outfile = f"sunrise_sunset_{name}.csv"
+        df.to_csv(outfile, index=False)
+        print(f"  Saved {len(df)} rows to {outfile}")
 
     print("\nComplete!")
 

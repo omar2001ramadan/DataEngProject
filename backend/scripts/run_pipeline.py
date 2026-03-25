@@ -1,9 +1,10 @@
 """
+Burch Parshall
 Full pipeline entry point.
 
 Step 1: Load historical CSVs into PostgreSQL via team build_tables scripts
-Step 2: Pull fresh EIA solar data from the latest record to now
-Step 3: Pull fresh sunrise/sunset data from the latest record to now
+Step 2: Pull fresh EIA solar data from the latest record to now (Sanbir's pull script)
+Step 3: Pull fresh sunrise/sunset data from the latest record to now (Sanbir's pull script)
 Step 4: Rebuild materialized views
 
 Usage:
@@ -12,8 +13,6 @@ Usage:
 
 import os
 import sys
-import time
-import requests
 import pandas as pd
 from datetime import datetime, date, timedelta, timezone
 from sqlalchemy import create_engine, text
@@ -24,51 +23,29 @@ sys.path.insert(0, BACKEND_DIR)
 sys.path.insert(0, SCRIPT_DIR)
 
 from config import DATABASE_URL
+from eia_solar_pull import pull_date_range as pull_eia_solar
+from sunrise_sunset_pull import pull_date_range as pull_sunrise_sunset
 
 engine = create_engine(DATABASE_URL)
 
-# --- EIA Solar Pull ---
-
-EIA_API_KEY = os.environ.get("EIA_API_KEY", "TOgKBkcA9l7RNC45V7BuyvdvxZTeceisVTjrHqRx")
-EIA_BASE_URL = "https://api.eia.gov/v2/electricity/rto/fuel-type-data/data/"
 RESPONDENTS = ["CISO", "ERCO"]
 
 
 def get_latest_solar_period():
-    """Get the most recent solar generation timestamp in the database."""
     with engine.connect() as conn:
-        result = conn.execute(text("SELECT MAX(period) FROM solar_generation")).scalar()
-    return result
+        return conn.execute(text("SELECT MAX(period) FROM solar_generation")).scalar()
 
 
-def fetch_eia_page(offset, start_date, end_date):
-    params = {
-        "api_key": EIA_API_KEY,
-        "frequency": "hourly",
-        "data[0]": "value",
-        "facets[respondent][]": RESPONDENTS,
-        "facets[fueltype][]": "SUN",
-        "start": start_date,
-        "end": end_date,
-        "sort[0][column]": "period",
-        "sort[0][direction]": "asc",
-        "offset": offset,
-        "length": 5000,
-    }
-    for attempt in range(5):
-        resp = requests.get(EIA_BASE_URL, params=params, timeout=60)
-        if resp.status_code == 429:
-            wait = 60 * (attempt + 1)
-            print(f"  Rate limited. Waiting {wait}s...")
-            time.sleep(wait)
-            continue
-        resp.raise_for_status()
-        return resp.json()
-    raise Exception(f"EIA API failed after retries at offset {offset}")
+def get_latest_timing_date(respondent_id):
+    with engine.connect() as conn:
+        return conn.execute(
+            text("SELECT MAX(date) FROM daily_solar_timing WHERE respondent_id = :rid"),
+            {"rid": respondent_id}
+        ).scalar()
 
 
 def pull_fresh_solar():
-    """Pull EIA solar data from the latest DB record to now and insert new rows."""
+    """Use Sanbir's EIA pull to get data from the latest DB record to now."""
     latest = get_latest_solar_period()
     if latest is None:
         print("  No existing solar data, skipping fresh pull.")
@@ -76,36 +53,13 @@ def pull_fresh_solar():
 
     start_str = (latest + timedelta(hours=1)).strftime("%Y-%m-%dT%H")
     end_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
-    print(f"  Pulling EIA solar from {start_str} to {end_str}...")
 
-    all_records = []
-    offset = 0
-    while True:
-        data = fetch_eia_page(offset, start_str, end_str)
-        total = int(data["response"]["total"])
-        records = data["response"]["data"]
-        if not records:
-            break
-        all_records.extend(records)
-        offset += 5000
-        print(f"  Fetched {len(all_records):,} / {total:,}")
-        if offset >= total:
-            break
-        time.sleep(2)
-
-    if not all_records:
+    df = pull_eia_solar(start_str, end_str)
+    if df.empty:
         print("  No new solar records available.")
         return 0
 
-    df = pd.DataFrame(all_records)
-    df["value"] = pd.to_numeric(df["value"], errors="coerce")
-    df["period"] = pd.to_datetime(df["period"], errors="coerce")
-    df = df[df["fueltype"] == "SUN"].copy()
-    df = df.dropna(subset=["period", "respondent", "value"])
-    df = df[df["respondent"].isin(RESPONDENTS)].copy()
-    df = df.drop_duplicates(subset=["respondent", "period"])
-    df.loc[df["value"] < 0, "value"] = 0
-
+    # Map to DB columns
     df["respondent_id"] = df["respondent"]
     df["date_id"] = df["period"].dt.date
     df["value_mwh"] = df["value"]
@@ -116,97 +70,56 @@ def pull_fresh_solar():
     return len(df)
 
 
-# --- Sunrise/Sunset Pull ---
-
-def get_latest_timing_date(respondent_id):
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT MAX(date) FROM daily_solar_timing WHERE respondent_id = :rid"),
-            {"rid": respondent_id}
-        ).scalar()
-    return result
-
-
-def fetch_sunrise_sunset(lat, lng, dt):
-    url = "https://api.sunrise-sunset.org/json"
-    params = {"lat": lat, "lng": lng, "date": dt.isoformat(), "formatted": 0}
-    for attempt in range(3):
-        try:
-            resp = requests.get(url, params=params, timeout=30)
-            resp.raise_for_status()
-            data = resp.json()
-            if data.get("status") == "OK":
-                return data["results"]
-        except Exception as e:
-            time.sleep(5 * (attempt + 1))
-    return None
-
-
-SITE_COORDS = {
-    "CISO": {"lat": 35.0, "lng": -118.0},
-    "ERCO": {"lat": 31.8, "lng": -99.4},
-}
-
-
 def pull_fresh_timing():
-    """Pull sunrise/sunset data from the latest DB record to today."""
+    """Use Sanbir's sunrise/sunset pull to get data from the latest DB record to today."""
     total_inserted = 0
     today = date.today()
 
-    for respondent_id, coords in SITE_COORDS.items():
+    for respondent_id in RESPONDENTS:
         latest = get_latest_timing_date(respondent_id)
         if latest is None:
             print(f"  No existing timing data for {respondent_id}, skipping.")
             continue
 
-        start = latest + timedelta(days=1)
-        if start > today:
+        start_dt = latest + timedelta(days=1)
+        if start_dt > today:
             print(f"  {respondent_id} timing data is current.")
             continue
 
-        days_needed = (today - start).days + 1
-        print(f"  Pulling {days_needed} days of sunrise/sunset for {respondent_id}...")
+        df = pull_sunrise_sunset(respondent_id, start_dt, today)
+        if df.empty:
+            continue
 
-        rows = []
-        current = start
-        while current <= today:
-            result = fetch_sunrise_sunset(coords["lat"], coords["lng"], current)
-            if result:
-                sunrise = pd.to_datetime(result.get("sunrise"), errors="coerce")
-                sunset = pd.to_datetime(result.get("sunset"), errors="coerce")
-                day_length = result.get("day_length")
-                if sunrise is not pd.NaT and sunset is not pd.NaT and sunrise < sunset:
-                    row = {
-                        "respondent_id": respondent_id,
-                        "date_id": current,
-                        "date": current,
-                        "sunrise": sunrise,
-                        "sunset": sunset,
-                        "day_length_sec": int(day_length),
-                    }
-                    for key, col in [("solar_noon", "solar_noon"),
-                                     ("civil_twilight_begin", "civil_twilight_begin"),
-                                     ("civil_twilight_end", "civil_twilight_end"),
-                                     ("nautical_twilight_begin", "nautical_twilight_begin"),
-                                     ("nautical_twilight_end", "nautical_twilight_end"),
-                                     ("astronomical_twilight_begin", "astronomical_twilight_begin"),
-                                     ("astronomical_twilight_end", "astronomical_twilight_end")]:
-                        val = result.get(key)
-                        row[col] = pd.to_datetime(val, errors="coerce") if val else None
-                    rows.append(row)
-            current += timedelta(days=1)
-            time.sleep(0.5)
+        # Map to DB columns
+        df["respondent_id"] = respondent_id
+        df["date_id"] = pd.to_datetime(df["date"]).dt.date
+        df["date"] = pd.to_datetime(df["date"]).dt.date
+        df["day_length_sec"] = df["day_length"]
 
-        if rows:
-            df = pd.DataFrame(rows)
-            df.to_sql("daily_solar_timing", engine, if_exists="append", index=False, method="multi")
-            print(f"  Inserted {len(df)} new timing rows for {respondent_id}.")
-            total_inserted += len(df)
+        # Rename astronomical columns to match schema
+        rename = {
+            "astronomical_twilight_begin": "astronomical_twilight_begin",
+            "astronomical_twilight_end": "astronomical_twilight_end",
+        }
+        df = df.rename(columns=rename)
+
+        out_cols = [
+            "respondent_id", "date_id", "date", "sunrise", "sunset", "solar_noon",
+            "day_length_sec", "civil_twilight_begin", "civil_twilight_end",
+            "nautical_twilight_begin", "nautical_twilight_end",
+            "astronomical_twilight_begin", "astronomical_twilight_end",
+        ]
+        for col in out_cols:
+            if col not in df.columns:
+                df[col] = None
+        df = df[out_cols]
+
+        df.to_sql("daily_solar_timing", engine, if_exists="append", index=False, method="multi")
+        print(f"  Inserted {len(df)} new timing rows for {respondent_id}.")
+        total_inserted += len(df)
 
     return total_inserted
 
-
-# --- Materialized View Refresh ---
 
 def refresh_views():
     print("Refreshing materialized views...")
@@ -216,8 +129,6 @@ def refresh_views():
         conn.commit()
     print("  Views refreshed.")
 
-
-# --- Main ---
 
 def main():
     print("=" * 50)

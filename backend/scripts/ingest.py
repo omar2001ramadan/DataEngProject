@@ -1,4 +1,5 @@
 """
+Burch Parshall
 CSV -> PostgreSQL ingestion script (3NF schema matching ERD).
 Orchestrates the build_tables scripts to create and populate tables,
 then creates materialized views for the API.

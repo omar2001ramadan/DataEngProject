@@ -11,21 +11,32 @@ def solar_daily():
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
 
-    where = ["region = :region"]
+    where = ["ds.region = :region"]
     params = {"region": region}
     if start_date:
-        where.append("date >= :start_date")
+        where.append("ds.date >= :start_date")
         params["start_date"] = start_date
     if end_date:
-        where.append("date <= :end_date")
+        where.append("ds.date <= :end_date")
         params["end_date"] = end_date
 
     query = text(f"""
-        SELECT date, total_mwh, peak_mwh, avg_temperature,
-               avg_humidity, day_length_seconds
-        FROM daily_summary
+        SELECT ds.date, ds.total_mwh, ds.peak_mwh, ds.avg_temperature,
+               ds.avg_humidity, ds.avg_wind_speed, ds.avg_visibility,
+               ds.avg_pressure, ds.day_length_seconds,
+               wx.total_precip, wx.sky_conditions
+        FROM daily_summary ds
+        LEFT JOIN (
+            SELECT DATE(w.observation_datetime) AS pdate, ws.respondent_id AS pregion,
+                   SUM(w.precipitation_mm) AS total_precip,
+                   MODE() WITHIN GROUP (ORDER BY w.sky_conditions) AS sky_conditions
+            FROM weather_observation w
+            JOIN weather_station ws ON w.station_id = ws.station_id
+            WHERE w.sky_conditions IS NOT NULL
+            GROUP BY DATE(w.observation_datetime), ws.respondent_id
+        ) wx ON wx.pdate = ds.date AND wx.pregion = ds.region
         WHERE {" AND ".join(where)}
-        ORDER BY date
+        ORDER BY ds.date
     """)
 
     rows = db.session.execute(query, params).mappings().all()
@@ -35,6 +46,11 @@ def solar_daily():
         "peak_mwh": round(float(r["peak_mwh"]), 1),
         "avg_temperature": round(float(r["avg_temperature"]), 1) if r["avg_temperature"] else None,
         "avg_humidity": round(float(r["avg_humidity"]), 1) if r["avg_humidity"] else None,
+        "avg_wind_speed": round(float(r["avg_wind_speed"]), 1) if r["avg_wind_speed"] else None,
+        "avg_visibility": round(float(r["avg_visibility"]), 1) if r["avg_visibility"] else None,
+        "avg_pressure": round(float(r["avg_pressure"]), 1) if r["avg_pressure"] else None,
+        "total_precip": round(float(r["total_precip"]), 2) if r["total_precip"] else None,
+        "sky_conditions": r["sky_conditions"] if r["sky_conditions"] else None,
         "day_length_hours": round(float(r["day_length_seconds"]) / 3600, 2) if r["day_length_seconds"] else None,
     } for r in rows])
 
@@ -49,10 +65,13 @@ def solar_hourly():
     query = text("""
         SELECT
             EXTRACT(HOUR FROM s.period)::int AS hour,
-            s.value_mwh,
-            w.dry_bulb_temp_c AS temperature,
-            w.relative_humidity_pct AS humidity,
-            w.wind_speed_kmh AS wind_speed
+            AVG(s.value_mwh) AS value_mwh,
+            AVG(w.dry_bulb_temp_c) AS temperature,
+            AVG(w.relative_humidity_pct) AS humidity,
+            AVG(w.wind_speed_kmh) AS wind_speed,
+            AVG(w.visibility_km) AS visibility,
+            SUM(w.precipitation_mm) AS precipitation,
+            MODE() WITHIN GROUP (ORDER BY w.sky_conditions) AS sky_conditions
         FROM solar_generation s
         JOIN respondent r ON s.respondent_id = r.respondent_id
         LEFT JOIN weather_station ws ON ws.respondent_id = r.respondent_id
@@ -61,6 +80,7 @@ def solar_hourly():
             AND DATE(s.period) = DATE(w.observation_datetime)
             AND EXTRACT(HOUR FROM s.period) = EXTRACT(HOUR FROM w.observation_datetime)
         WHERE r.respondent_id = :region AND DATE(s.period) = :date
+        GROUP BY EXTRACT(HOUR FROM s.period)
         ORDER BY hour
     """)
 
@@ -80,6 +100,9 @@ def solar_hourly():
             "temperature": round(float(r["temperature"]), 1) if r["temperature"] else None,
             "humidity": round(float(r["humidity"]), 1) if r["humidity"] else None,
             "wind_speed": round(float(r["wind_speed"]), 1) if r["wind_speed"] else None,
+            "visibility": round(float(r["visibility"]), 1) if r["visibility"] else None,
+            "precipitation": round(float(r["precipitation"]), 2) if r["precipitation"] else None,
+            "sky_conditions": r["sky_conditions"] if r["sky_conditions"] else None,
         } for r in rows],
     }
     if sun:

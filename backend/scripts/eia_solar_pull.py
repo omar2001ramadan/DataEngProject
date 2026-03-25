@@ -1,29 +1,29 @@
 """
-Pull 5 years of hourly solar generation data from the EIA API v2
+Sanbir Rahman
+Pull hourly solar generation data from the EIA API v2
 for CISO (California ISO) and ERCO (Texas ERCOT).
 
 Data source: https://api.eia.gov/v2/electricity/rto/fuel-type-data/
 Fuel type: SUN (Solar)
 """
 
+import os
 import requests
 import pandas as pd
 import time
 from datetime import datetime
 
-API_KEY = "TOgKBkcA9l7RNC45V7BuyvdvxZTeceisVTjrHqRx"
+API_KEY = os.environ.get("EIA_API_KEY", "TOgKBkcA9l7RNC45V7BuyvdvxZTeceisVTjrHqRx")
 BASE_URL = "https://api.eia.gov/v2/electricity/rto/fuel-type-data/data/"
 
 RESPONDENTS = ["CISO", "ERCO"]
 FUEL_TYPE = "SUN"
-START_DATE = "2021-02-25T00"  # 5 years ago from today
-END_DATE = "2026-02-25T23"
 MAX_ROWS = 5000
 REQUEST_DELAY = 2  # seconds between requests
 MAX_RETRIES = 10
 
 
-def fetch_page(offset):
+def fetch_page(offset, start_date, end_date):
     """Fetch a single page of results from the EIA API with retry on 429."""
     params = {
         "api_key": API_KEY,
@@ -31,8 +31,8 @@ def fetch_page(offset):
         "data[0]": "value",
         "facets[respondent][]": RESPONDENTS,
         "facets[fueltype][]": FUEL_TYPE,
-        "start": START_DATE,
-        "end": END_DATE,
+        "start": start_date,
+        "end": end_date,
         "sort[0][column]": "period",
         "sort[0][direction]": "asc",
         "offset": offset,
@@ -50,34 +50,8 @@ def fetch_page(offset):
     raise Exception(f"Failed after {MAX_RETRIES} retries at offset {offset}")
 
 
-def main():
-    all_records = []
-    offset = 0
-
-    # First request to get total count
-    print("Fetching first page to determine total records...")
-    data = fetch_page(offset)
-    total = int(data["response"]["total"])
-    records = data["response"]["data"]
-    all_records.extend(records)
-    print(f"Total records available: {total:,}")
-    print(f"Requests needed: {(total // MAX_ROWS) + 1}")
-    print(f"Fetched {len(all_records):,} / {total:,}")
-
-    offset += MAX_ROWS
-
-    while offset < total:
-        time.sleep(REQUEST_DELAY)
-        data = fetch_page(offset)
-        records = data["response"]["data"]
-        if not records:
-            break
-        all_records.extend(records)
-        offset += MAX_ROWS
-        print(f"Fetched {len(all_records):,} / {total:,}")
-
-    # Build DataFrame
-    df = pd.DataFrame(all_records)
+def clean(df):
+    """Apply cleaning: type conversion, dedup, null handling, negative fix."""
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
     df["period"] = pd.to_datetime(df["period"], errors="coerce")
 
@@ -96,17 +70,59 @@ def main():
 
     df.sort_values(["respondent", "period"], inplace=True)
     df.reset_index(drop=True, inplace=True)
+    return df
 
-    # Save to CSV
+
+def pull_date_range(start_date, end_date):
+    """Pull and clean EIA solar data for a date range.
+
+    Args:
+        start_date: Start datetime string (e.g. "2026-03-16T00")
+        end_date: End datetime string (e.g. "2026-03-24T00")
+
+    Returns:
+        Cleaned DataFrame with columns: respondent, period, value
+    """
+    print(f"  Pulling EIA solar from {start_date} to {end_date}...")
+
+    all_records = []
+    offset = 0
+    while True:
+        data = fetch_page(offset, start_date, end_date)
+        total = int(data["response"]["total"])
+        records = data["response"]["data"]
+        if not records:
+            break
+        all_records.extend(records)
+        offset += MAX_ROWS
+        print(f"  Fetched {len(all_records):,} / {total:,}")
+        if offset >= total:
+            break
+        time.sleep(REQUEST_DELAY)
+
+    if not all_records:
+        print("  No records available.")
+        return pd.DataFrame()
+
+    df = pd.DataFrame(all_records)
+    return clean(df)
+
+
+def main():
+    """Pull full 5-year dataset and save to CSV."""
+    start_date = "2021-02-25T00"
+    end_date = "2026-02-25T23"
+
+    df = pull_date_range(start_date, end_date)
+
     outfile = "eia_solar_hourly.csv"
     df.to_csv(outfile, index=False)
     print(f"\nSaved {len(df):,} rows to {outfile}")
 
-    # Summary
     print("\n--- Summary ---")
     print(f"Date range: {df['period'].min()} to {df['period'].max()}")
     print(f"\nRows per respondent:")
-    print(df.groupby(["respondent", "respondent-name"])["value"].agg(["count", "sum", "mean"]).to_string())
+    print(df.groupby("respondent")["value"].agg(["count", "sum", "mean"]).to_string())
 
 
 if __name__ == "__main__":
