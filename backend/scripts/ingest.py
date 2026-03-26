@@ -10,6 +10,7 @@ Usage:
 import os
 import sys
 import psycopg2
+from datetime import datetime
 from sqlalchemy import create_engine, text
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -135,6 +136,17 @@ def main():
 
     from build_tables_timing import main as build_timing
     build_timing()
+
+    # Pull capacity CSV if it doesn't exist yet (initial run)
+    from db_connect import data_file
+    capacity_csv = data_file("eia_capacity_monthly.csv")
+    if not os.path.exists(capacity_csv):
+        print("\n  Capacity CSV not found, pulling from EIA API...")
+        from eia_capacity_pull import pull_date_range as pull_capacity
+        df = pull_capacity("2021-01", datetime.now().strftime("%Y-%m"))
+        if not df.empty:
+            df.to_csv(capacity_csv, index=False)
+            print(f"  Saved {len(df)} rows to {capacity_csv}")
 
     from build_tables_capacity import main as build_capacity
     build_capacity()

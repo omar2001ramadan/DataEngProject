@@ -127,6 +127,10 @@ export default function Compare() {
         </BarChart>
       </ResponsiveContainer>
 
+      {normalize && (
+        <p className="hint">Capacity values are sourced from EIA Form 860M (monthly estimates) and may not reflect actual installed capacity, particularly during periods of rapid solar expansion.</p>
+      )}
+
       <h2>Summary</h2>
       <table className="summary-table">
         <thead>

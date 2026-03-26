@@ -6,7 +6,8 @@ Step 1: Load historical CSVs into PostgreSQL via team build_tables scripts
 Step 2: Pull fresh EIA solar data from the latest record to now (Sanbir's pull script)
 Step 3: Pull fresh EIA capacity data from the latest record to now
 Step 4: Pull fresh sunrise/sunset data from the latest record to now (Sanbir's pull script)
-Step 5: Rebuild materialized views
+Step 5: Pull fresh NOAA weather data from the latest record to now (Sanbir's pull script)
+Step 6: Rebuild materialized views
 
 Usage:
   docker compose exec backend python scripts/run_pipeline.py
@@ -27,6 +28,7 @@ from config import DATABASE_URL
 from eia_solar_pull import pull_date_range as pull_eia_solar
 from eia_capacity_pull import pull_date_range as pull_eia_capacity
 from sunrise_sunset_pull import pull_date_range as pull_sunrise_sunset
+from noaa_weather_pull import pull_date_range as pull_noaa_weather
 
 engine = create_engine(DATABASE_URL)
 
@@ -157,6 +159,81 @@ def pull_fresh_timing():
     return total_inserted
 
 
+def get_latest_weather_date(respondent_id):
+    """Get station_id and latest observation date for a respondent."""
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("""SELECT ws.station_id, MAX(DATE(w.observation_datetime))
+                    FROM weather_observation w
+                    JOIN weather_station ws ON w.station_id = ws.station_id
+                    WHERE ws.respondent_id = :rid
+                    GROUP BY ws.station_id"""),
+            {"rid": respondent_id}
+        ).fetchone()
+    if row:
+        return row[0], row[1]
+    return None, None
+
+
+def pull_fresh_weather():
+    """Use Sanbir's NOAA pull to get weather data from the latest DB record to today."""
+    total_inserted = 0
+    today = date.today()
+
+    for respondent_id in RESPONDENTS:
+        station_id, latest = get_latest_weather_date(respondent_id)
+        if latest is None:
+            print(f"  No existing weather data for {respondent_id}, skipping.")
+            continue
+
+        start_dt = latest + timedelta(days=1)
+        if start_dt > today:
+            print(f"  {respondent_id} weather data is current.")
+            continue
+
+        df = pull_noaa_weather(respondent_id, str(start_dt), str(today))
+        if df.empty:
+            continue
+
+        # Map to DB columns matching build_tables_observation.py
+        obs = df.rename(columns={
+            "STATION": "station_id",
+            "DATE": "observation_datetime",
+            "HourlyDryBulbTemperature": "dry_bulb_temp_c",
+            "HourlyDewPointTemperature": "dew_point_temp_c",
+            "HourlyRelativeHumidity": "relative_humidity_pct",
+            "HourlyWetBulbTemperature": "wet_bulb_temp_c",
+            "HourlyWindSpeed": "wind_speed_kmh",
+            "HourlyWindDirection": "wind_direction_deg",
+            "HourlyWindGustSpeed": "wind_gust_speed_kmh",
+            "HourlyPrecipitation": "precipitation_mm",
+            "HourlySkyConditions": "sky_conditions",
+            "HourlyVisibility": "visibility_km",
+            "HourlyStationPressure": "station_pressure_hpa",
+            "HourlyAltimeterSetting": "altimeter_setting_hpa",
+        })
+        obs["station_id"] = str(station_id)
+        obs["date_id"] = pd.to_datetime(obs["observation_datetime"]).dt.date
+
+        out_cols = [
+            "station_id", "date_id", "observation_datetime",
+            "dry_bulb_temp_c", "dew_point_temp_c", "relative_humidity_pct",
+            "wet_bulb_temp_c", "wind_speed_kmh", "wind_direction_deg",
+            "wind_gust_speed_kmh", "precipitation_mm", "sky_conditions",
+            "visibility_km", "station_pressure_hpa", "altimeter_setting_hpa",
+        ]
+        for col in out_cols:
+            if col not in obs.columns:
+                obs[col] = None
+        obs = obs[out_cols]
+
+        obs.to_sql("weather_observation", engine, if_exists="append", index=False, method="multi", chunksize=5000)
+        print(f"  Inserted {len(obs)} new weather rows for {respondent_id}.")
+        total_inserted += len(obs)
+
+    return total_inserted
+
+
 def refresh_views():
     print("Refreshing materialized views...")
     with engine.connect() as conn:
@@ -188,12 +265,16 @@ def main():
     print("\n[Step 4] Pulling fresh sunrise/sunset data...")
     new_timing = pull_fresh_timing()
 
-    # Step 5: Refresh views if new data was added
-    if new_solar > 0 or new_timing > 0 or new_capacity > 0:
-        print("\n[Step 5] Refreshing materialized views...")
+    # Step 5: Pull fresh weather data
+    print("\n[Step 5] Pulling fresh NOAA weather data...")
+    new_weather = pull_fresh_weather()
+
+    # Step 6: Refresh views if new data was added
+    if new_solar > 0 or new_timing > 0 or new_capacity > 0 or new_weather > 0:
+        print("\n[Step 6] Refreshing materialized views...")
         refresh_views()
     else:
-        print("\n[Step 5] No new data, views already current.")
+        print("\n[Step 6] No new data, views already current.")
 
     # Summary
     print("\n" + "=" * 50)
