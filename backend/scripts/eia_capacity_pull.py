@@ -13,7 +13,7 @@ import requests
 import pandas as pd
 import time
 
-API_KEY = os.environ.get("EIA_API_KEY", "TOgKBkcA9l7RNC45V7BuyvdvxZTeceisVTjrHqRx")
+API_KEY = os.environ.get("EIA_API_KEY", "")
 BASE_URL = "https://api.eia.gov/v2/electricity/operating-generator-capacity/data/"
 
 RESPONDENTS = ["CISO", "ERCO"]

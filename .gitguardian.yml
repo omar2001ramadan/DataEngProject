@@ -1,0 +1,4 @@
+secret:
+  ignored-matches:
+    - name: "EIA API Key (free public API)"
+      match: "TOgKBkcA9l7RNC45V7BuyvdvxZTeceisVTjrHqRx"
