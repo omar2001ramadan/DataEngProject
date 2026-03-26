@@ -4,8 +4,9 @@ Full pipeline entry point.
 
 Step 1: Load historical CSVs into PostgreSQL via team build_tables scripts
 Step 2: Pull fresh EIA solar data from the latest record to now (Sanbir's pull script)
-Step 3: Pull fresh sunrise/sunset data from the latest record to now (Sanbir's pull script)
-Step 4: Rebuild materialized views
+Step 3: Pull fresh EIA capacity data from the latest record to now
+Step 4: Pull fresh sunrise/sunset data from the latest record to now (Sanbir's pull script)
+Step 5: Rebuild materialized views
 
 Usage:
   docker compose exec backend python scripts/run_pipeline.py
@@ -24,6 +25,7 @@ sys.path.insert(0, SCRIPT_DIR)
 
 from config import DATABASE_URL
 from eia_solar_pull import pull_date_range as pull_eia_solar
+from eia_capacity_pull import pull_date_range as pull_eia_capacity
 from sunrise_sunset_pull import pull_date_range as pull_sunrise_sunset
 
 engine = create_engine(DATABASE_URL)
@@ -67,6 +69,40 @@ def pull_fresh_solar():
 
     df.to_sql("solar_generation", engine, if_exists="append", index=False, method="multi", chunksize=5000)
     print(f"  Inserted {len(df)} new solar rows.")
+    return len(df)
+
+
+def get_latest_capacity_month():
+    with engine.connect() as conn:
+        return conn.execute(text("SELECT MAX(date_id) FROM solar_capacity")).scalar()
+
+
+def pull_fresh_capacity():
+    """Pull capacity data from the latest DB record to now, and append to CSV."""
+    latest = get_latest_capacity_month()
+    if latest is None:
+        print("  No existing capacity data, skipping fresh pull.")
+        return 0
+
+    # Move to next month
+    next_month = latest.replace(day=1) + timedelta(days=32)
+    start_str = next_month.strftime("%Y-%m")
+    end_str = datetime.now(timezone.utc).strftime("%Y-%m")
+
+    df = pull_eia_capacity(start_str, end_str)
+    if df.empty:
+        print("  No new capacity records available.")
+        return 0
+
+    df.to_sql("solar_capacity", engine, if_exists="append", index=False, method="multi")
+    print(f"  Inserted {len(df)} new capacity rows.")
+
+    # Append new rows to the CSV so future rebuilds don't need to re-pull
+    from db_connect import data_file
+    csv_path = data_file("eia_capacity_monthly.csv")
+    df.to_csv(csv_path, mode="a", header=not os.path.exists(csv_path), index=False)
+    print(f"  Appended {len(df)} rows to {csv_path}")
+
     return len(df)
 
 
@@ -144,24 +180,28 @@ def main():
     print("\n[Step 2] Pulling fresh EIA solar data...")
     new_solar = pull_fresh_solar()
 
-    # Step 3: Pull fresh sunrise/sunset data
-    print("\n[Step 3] Pulling fresh sunrise/sunset data...")
+    # Step 3: Pull fresh capacity data
+    print("\n[Step 3] Pulling fresh EIA capacity data...")
+    new_capacity = pull_fresh_capacity()
+
+    # Step 4: Pull fresh sunrise/sunset data
+    print("\n[Step 4] Pulling fresh sunrise/sunset data...")
     new_timing = pull_fresh_timing()
 
-    # Step 4: Refresh views if new data was added
-    if new_solar > 0 or new_timing > 0:
-        print("\n[Step 4] Refreshing materialized views...")
+    # Step 5: Refresh views if new data was added
+    if new_solar > 0 or new_timing > 0 or new_capacity > 0:
+        print("\n[Step 5] Refreshing materialized views...")
         refresh_views()
     else:
-        print("\n[Step 4] No new data, views already current.")
+        print("\n[Step 5] No new data, views already current.")
 
     # Summary
     print("\n" + "=" * 50)
     print("Pipeline complete!")
     with engine.connect() as conn:
         for table in ['date_dimension', 'respondent', 'weather_station',
-                       'solar_generation', 'weather_observation', 'daily_solar_timing',
-                       'daily_summary', 'monthly_summary']:
+                       'solar_generation', 'solar_capacity', 'weather_observation',
+                       'daily_solar_timing', 'daily_summary', 'monthly_summary']:
             count = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
             print(f"  {table}: {count:,} rows")
     print("=" * 50)

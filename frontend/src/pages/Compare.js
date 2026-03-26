@@ -11,6 +11,7 @@ export default function Compare() {
   const [endDate, setEndDate] = useState("");
   const [brushKey, setBrushKey] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [normalize, setNormalize] = useState(false);
   const brushRef = useRef({ startIndex: 0, endIndex: 0 });
 
   useEffect(() => {
@@ -60,10 +61,22 @@ export default function Compare() {
     return allData.slice(brushRef.current.startIndex, brushRef.current.endIndex + 1);
   }, [allData, startDate, endDate]);
 
+  // Check if capacity data is available for the normalize toggle
+  const hasCapacity = allData.some(
+    (r) => r.ciso_capacity_factor_pct != null || r.erco_capacity_factor_pct != null
+  );
+
+  // Pick which data keys to chart based on normalize toggle
+  const cisoKey = normalize ? "ciso_capacity_factor_pct" : "ciso_total_mwh";
+  const ercoKey = normalize ? "erco_capacity_factor_pct" : "erco_total_mwh";
+  const yLabel = normalize ? "Capacity Factor (%)" : "MWh";
+
   if (loading) return <div className="loading">Loading comparison data...</div>;
 
   const cisoTotal = visibleData.reduce((s, r) => s + (r.ciso_total_mwh || 0), 0);
   const ercoTotal = visibleData.reduce((s, r) => s + (r.erco_total_mwh || 0), 0);
+  const cisoAvgCF = visibleData.filter((r) => r.ciso_capacity_factor_pct != null);
+  const ercoAvgCF = visibleData.filter((r) => r.erco_capacity_factor_pct != null);
 
   return (
     <div className="page">
@@ -75,18 +88,35 @@ export default function Compare() {
           <label>To</label>
           <input type="text" value={endDate} placeholder="YYYY-MM" size="8" onChange={(e) => handleEndDateChange(e.target.value)} />
         </div>
+        {hasCapacity && (
+          <div className="region-selector">
+            <label>View</label>
+            <button className={!normalize ? "active" : ""} onClick={() => setNormalize(false)}>Raw MWh</button>
+            <button className={normalize ? "active" : ""} onClick={() => setNormalize(true)}>Normalize by Capacity</button>
+          </div>
+        )}
       </div>
 
-      <h2>Monthly Generation - CISO vs ERCO</h2>
+      <h2>
+        {normalize
+          ? "Monthly Capacity Factor - CISO vs ERCO"
+          : "Monthly Generation - CISO vs ERCO"}
+      </h2>
       <ResponsiveContainer width="100%" height={400}>
         <BarChart data={allData}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="label" />
-          <YAxis />
-          <Tooltip />
+          <YAxis label={{ value: yLabel, angle: -90, position: "insideLeft", style: { fill: "#94a3b8" } }} />
+          <Tooltip
+            formatter={(value, name) =>
+              normalize
+                ? [`${value != null ? value.toFixed(2) : "N/A"}%`, name]
+                : [`${value != null ? value.toLocaleString() : "N/A"} MWh`, name]
+            }
+          />
           <Legend />
-          <Bar dataKey="ciso_total_mwh" fill="#f59e0b" name="California (CISO)" />
-          <Bar dataKey="erco_total_mwh" fill="#3b82f6" name="Texas (ERCO)" />
+          <Bar dataKey={cisoKey} fill="#f59e0b" name="California (CISO)" />
+          <Bar dataKey={ercoKey} fill="#3b82f6" name="Texas (ERCO)" />
           <Brush
             key={brushKey}
             dataKey="label" height={30} stroke="#8884d8"
@@ -130,6 +160,21 @@ export default function Compare() {
                 : "-"}
             </td>
           </tr>
+          {hasCapacity && (
+            <tr>
+              <td>Avg Capacity Factor</td>
+              <td>
+                {cisoAvgCF.length
+                  ? (cisoAvgCF.reduce((s, r) => s + r.ciso_capacity_factor_pct, 0) / cisoAvgCF.length).toFixed(2) + "%"
+                  : "N/A"}
+              </td>
+              <td>
+                {ercoAvgCF.length
+                  ? (ercoAvgCF.reduce((s, r) => s + r.erco_capacity_factor_pct, 0) / ercoAvgCF.length).toFixed(2) + "%"
+                  : "N/A"}
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

@@ -164,7 +164,8 @@ def solar_comparison():
     where_clause = ("WHERE " + " AND ".join(where)) if where else ""
 
     query = text(f"""
-        SELECT month, region, total_mwh, avg_daily_mwh
+        SELECT month, region, total_mwh, avg_daily_mwh,
+               capacity_mw, capacity_factor_pct
         FROM monthly_summary
         {where_clause}
         ORDER BY month, region
@@ -181,5 +182,7 @@ def solar_comparison():
         prefix = r["region"].lower()
         months[m][f"{prefix}_total_mwh"] = round(float(r["total_mwh"]), 1)
         months[m][f"{prefix}_avg_daily_mwh"] = round(float(r["avg_daily_mwh"]), 1)
+        months[m][f"{prefix}_capacity_mw"] = round(float(r["capacity_mw"]), 1) if r["capacity_mw"] else None
+        months[m][f"{prefix}_capacity_factor_pct"] = round(float(r["capacity_factor_pct"]), 2) if r["capacity_factor_pct"] else None
 
     return jsonify(list(months.values()))

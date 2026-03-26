@@ -25,6 +25,7 @@ class Respondent(db.Model):
     stations = db.relationship("WeatherStation", backref="respondent")
     solar_records = db.relationship("SolarGeneration", backref="respondent")
     timing_records = db.relationship("DailySolarTiming", backref="respondent")
+    capacity_records = db.relationship("SolarCapacity", backref="respondent")
 
 
 class WeatherStation(db.Model):
@@ -45,6 +46,14 @@ class SolarGeneration(db.Model):
     period = db.Column(db.DateTime, nullable=False, index=True)
     date_id = db.Column(db.Date, db.ForeignKey("date_dimension.date_id"), nullable=False)
     value_mwh = db.Column(db.Float, nullable=False)
+
+
+class SolarCapacity(db.Model):
+    __tablename__ = "solar_capacity"
+    capacity_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    respondent_id = db.Column(db.String(10), db.ForeignKey("respondent.respondent_id"), nullable=False, index=True)
+    date_id = db.Column(db.Date, db.ForeignKey("date_dimension.date_id"), nullable=False)
+    capacity_mw = db.Column(db.Float, nullable=False)
 
 
 class WeatherObservation(db.Model):
