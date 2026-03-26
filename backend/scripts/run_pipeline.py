@@ -286,6 +286,8 @@ def main():
             count = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
             print(f"  {table}: {count:,} rows")
     print("=" * 50)
+    print("\nDashboard: http://localhost:3000")
+    print("API:       http://localhost:5000/api/health")
 
 
 if __name__ == "__main__":
