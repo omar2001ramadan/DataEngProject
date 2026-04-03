@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models import db
 from sqlalchemy import text
+from routes.helpers import validate_region, validate_date
 
 solar_bp = Blueprint("solar", __name__)
 
@@ -10,6 +11,18 @@ def solar_daily():
     region = request.args.get("region", "CISO")
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
+
+    err = validate_region(region)
+    if err:
+        return err
+    if start_date:
+        err = validate_date(start_date, "start_date")
+        if err:
+            return err
+    if end_date:
+        err = validate_date(end_date, "end_date")
+        if err:
+            return err
 
     where = ["ds.region = :region"]
     params = {"region": region}
@@ -62,6 +75,13 @@ def solar_hourly():
     if not date:
         return jsonify({"error": "date parameter required"}), 400
 
+    err = validate_region(region)
+    if err:
+        return err
+    err = validate_date(date, "date")
+    if err:
+        return err
+
     query = text("""
         SELECT
             EXTRACT(HOUR FROM s.period)::int AS hour,
@@ -86,7 +106,6 @@ def solar_hourly():
 
     rows = db.session.execute(query, {"region": region, "date": date}).mappings().all()
 
-    # Get sunrise/sunset for that day
     sun_query = text("""
         SELECT t.sunrise, t.sunset FROM daily_solar_timing t
         WHERE t.respondent_id = :region AND t.date = :date
@@ -117,6 +136,18 @@ def solar_monthly():
     region = request.args.get("region", "CISO")
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
+
+    err = validate_region(region)
+    if err:
+        return err
+    if start_date:
+        err = validate_date(start_date, "start_date")
+        if err:
+            return err
+    if end_date:
+        err = validate_date(end_date, "end_date")
+        if err:
+            return err
 
     where = ["region = :region"]
     params = {"region": region}
@@ -152,6 +183,15 @@ def solar_comparison():
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
 
+    if start_date:
+        err = validate_date(start_date, "start_date")
+        if err:
+            return err
+    if end_date:
+        err = validate_date(end_date, "end_date")
+        if err:
+            return err
+
     where = []
     params = {}
     if start_date:
@@ -172,7 +212,6 @@ def solar_comparison():
 
     rows = db.session.execute(query, params).mappings().all()
 
-    # Pivot: group by month with CISO/ERCO side by side
     months = {}
     for r in rows:
         m = str(r["month"])

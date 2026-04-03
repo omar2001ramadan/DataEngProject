@@ -37,7 +37,6 @@ def drop_all_tables():
         cur.execute("DROP TABLE IF EXISTS daily_solar_timing CASCADE")
         cur.execute("DROP TABLE IF EXISTS weather_station CASCADE")
         cur.execute("DROP TABLE IF EXISTS respondent CASCADE")
-        cur.execute("DROP TABLE IF EXISTS date_dimension CASCADE")
     conn.close()
     print("  All tables dropped.")
 
@@ -59,7 +58,7 @@ def create_materialized_views():
                 AVG(w.wind_speed_kmh) AS avg_wind_speed,
                 AVG(w.visibility_km) AS avg_visibility,
                 AVG(w.station_pressure_hpa) AS avg_pressure,
-                MIN(t.day_length_sec) AS day_length_seconds,
+                MIN(EXTRACT(EPOCH FROM (t.sunset - t.sunrise)))::INT AS day_length_seconds,
                 MIN(t.sunrise) AS sunrise,
                 MIN(t.sunset) AS sunset
             FROM solar_generation s
@@ -108,9 +107,6 @@ def main():
     # Build tables using team scripts (dependency order)
     print("\n--- Building tables ---")
 
-    from build_tables_dates import main as build_dates
-    build_dates()
-
     from build_tables_respondent import main as build_respondent
     build_respondent()
 
@@ -137,7 +133,7 @@ def main():
     # Summary
     print("\nIngestion complete!")
     with engine.connect() as conn:
-        for table in ['date_dimension', 'respondent', 'weather_station',
+        for table in ['respondent', 'weather_station',
                        'solar_generation', 'weather_observation', 'daily_solar_timing',
                        'daily_summary', 'monthly_summary']:
             count = conn.execute(text(f'SELECT COUNT(*) FROM {table}')).scalar()

@@ -22,11 +22,7 @@ No other software is required.
 cd DataEngProject
 ```
 
-2. Copy the environment file:
-
-```bash
-cp .env.example .env
-```
+2. Copy the provided `.env` file into the project root directory. This file contains the database credentials and API keys needed to run the pipeline.
 
 3. Build and start all services:
 
@@ -57,16 +53,17 @@ The API is available at [http://localhost:5000/api/health](http://localhost:5000
 
 ## Database Schema
 
-The pipeline creates the following tables in PostgreSQL:
+The database is normalized to 3NF with five tables. Date-derived fields (day of week, month name, season, etc.) and day length are computed in SQL views and queries rather than stored.
+
+![Database Schema](Solar_DB_Schema_3NF.png)
 
 | Table | Description |
 |---|---|
-| `date_dimension` | Lookup table for date attributes (day of week, month, season, quarter, weekend flag) covering 2000-2030 |
 | `respondent` | Grid region metadata (CISO and ERCO) with name and coordinates |
 | `weather_station` | NOAA weather station details (name, location) linked to a respondent |
-| `solar_generation` | Hourly solar generation in MWh from the EIA, linked to a respondent and date |
-| `weather_observation` | Hourly weather readings (temperature, humidity, wind, pressure, visibility, precipitation, sky conditions) linked to a station and date |
-| `daily_solar_timing` | Daily sunrise/sunset times, solar noon, day length, and twilight times for each respondent |
+| `solar_generation` | Hourly solar generation in MWh from the EIA, linked to a respondent |
+| `weather_observation` | Hourly weather readings (temperature, humidity, wind, pressure, visibility, precipitation, sky conditions) linked to a station |
+| `daily_solar_timing` | Daily sunrise/sunset times, solar noon, and twilight times for each respondent |
 
 The pipeline also creates two materialized views used by the API:
 
@@ -75,7 +72,7 @@ The pipeline also creates two materialized views used by the API:
 | `daily_summary` | Aggregates solar generation, weather, and daylight data per region per day |
 | `monthly_summary` | Rolls up daily_summary into monthly totals and averages |
 
-A merged view (`merged_weather_solar_view`) joins all six tables for ad-hoc analysis.
+A merged view (`merged_weather_solar_view`) joins all five tables for ad-hoc analysis.
 
 ## API Endpoints
 

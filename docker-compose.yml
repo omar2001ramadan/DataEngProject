@@ -21,6 +21,7 @@ services:
       - "5000:5000"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-jhu}:${POSTGRES_PASSWORD:-jhu123}@db:5432/${POSTGRES_DB:-solar_energy}
+      EIA_API_KEY: ${EIA_API_KEY}
     depends_on:
       db:
         condition: service_healthy

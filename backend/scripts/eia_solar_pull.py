@@ -13,7 +13,7 @@ import pandas as pd
 import time
 from datetime import datetime
 
-API_KEY = os.environ.get("EIA_API_KEY", "TOgKBkcA9l7RNC45V7BuyvdvxZTeceisVTjrHqRx")
+API_KEY = os.environ.get("EIA_API_KEY")
 BASE_URL = "https://api.eia.gov/v2/electricity/rto/fuel-type-data/data/"
 
 RESPONDENTS = ["CISO", "ERCO"]

@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models import db
 from sqlalchemy import text
+from routes.helpers import validate_region, validate_date
 
 overview_bp = Blueprint("overview", __name__)
 
@@ -10,6 +11,19 @@ def overview():
     region = request.args.get("region")
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
+
+    if region:
+        err = validate_region(region)
+        if err:
+            return err
+    if start_date:
+        err = validate_date(start_date, "start_date")
+        if err:
+            return err
+    if end_date:
+        err = validate_date(end_date, "end_date")
+        if err:
+            return err
 
     where = []
     params = {}
@@ -40,6 +54,13 @@ def overview():
     """)
 
     row = db.session.execute(query, params).mappings().first()
+
+    if row is None or row["total_days"] == 0:
+        return jsonify({
+            "total_mwh": 0, "avg_daily_mwh": 0, "peak_mwh": 0,
+            "date_from": None, "date_to": None, "total_days": 0,
+            "avg_temperature": 0, "avg_day_length_hours": 0,
+        })
     return jsonify({
         "total_mwh": round(float(row["total_mwh"]), 1),
         "avg_daily_mwh": round(float(row["avg_daily_mwh"]), 1),

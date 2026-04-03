@@ -14,7 +14,7 @@ def create_table(conn):
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
                 observation_id SERIAL PRIMARY KEY,
-                station_id VARCHAR(50),
+                station_id VARCHAR(50) NOT NULL,
                 date_id DATE,
                 observation_datetime TIMESTAMP,
                 dry_bulb_temp_c DECIMAL(5, 2),
@@ -29,8 +29,7 @@ def create_table(conn):
                 visibility_km DECIMAL(6, 2),
                 station_pressure_hpa DECIMAL(7, 2),
                 altimeter_setting_hpa DECIMAL(7, 2),
-                FOREIGN KEY (station_id) REFERENCES weather_station(station_id),
-                FOREIGN KEY (date_id) REFERENCES date_dimension(date_id)
+                FOREIGN KEY (station_id) REFERENCES weather_station(station_id)
             );
         """)
         conn.commit()
