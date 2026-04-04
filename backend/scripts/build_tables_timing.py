@@ -23,7 +23,6 @@ def create_table(conn):
                 sunrise TIMESTAMP,
                 sunset TIMESTAMP,
                 solar_noon TIMESTAMP,
-                day_length_sec INT,
                 civil_twilight_begin TIMESTAMP,
                 civil_twilight_end TIMESTAMP,
                 nautical_twilight_begin TIMESTAMP,
@@ -31,7 +30,7 @@ def create_table(conn):
                 astronomical_twilight_begin TIMESTAMP,
                 astronomical_twilight_end TIMESTAMP,
                 FOREIGN KEY (respondent_id) REFERENCES respondent(respondent_id),
-                FOREIGN KEY (date_id) REFERENCES date_dimension(date_id)
+                UNIQUE (respondent_id, date)
             );
         """)
         conn.commit()
@@ -45,12 +44,12 @@ def insert_data(conn):
     with conn.cursor() as cur:
         for _, row in df1.iterrows():
             cur.execute(f"""
-                INSERT INTO {TABLE_NAME} (respondent_id, date_id, date, sunrise, sunset, solar_noon, day_length_sec,
+                INSERT INTO {TABLE_NAME} (respondent_id, date_id, date, sunrise, sunset, solar_noon,
                                           civil_twilight_begin, civil_twilight_end, nautical_twilight_begin,
                                           nautical_twilight_end, astronomical_twilight_begin, astronomical_twilight_end)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
             """, ('CISO', row["date"], row["date"], row.get("sunrise"), row.get("sunset"),
-                  row.get("solar_noon"), row.get("day_length"), row.get("civil_twilight_begin"),
+                  row.get("solar_noon"), row.get("civil_twilight_begin"),
                   row.get("civil_twilight_end"), row.get("nautical_twilight_begin"),
                   row.get("nautical_twilight_end"), row.get("astronomical_twilight_begin"),
                   row.get("astronomical_twilight_end")))
@@ -58,12 +57,12 @@ def insert_data(conn):
         print(f"Inserted {len(df1)} CISO rows into {TABLE_NAME}.")
         for _, row in df2.iterrows():
             cur.execute(f"""
-                INSERT INTO {TABLE_NAME} (respondent_id, date_id, date, sunrise, sunset, solar_noon, day_length_sec,
+                INSERT INTO {TABLE_NAME} (respondent_id, date_id, date, sunrise, sunset, solar_noon,
                                           civil_twilight_begin, civil_twilight_end, nautical_twilight_begin,
                                           nautical_twilight_end, astronomical_twilight_begin, astronomical_twilight_end)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
             """, ('ERCO', row["date"], row["date"], row.get("sunrise"), row.get("sunset"),
-                  row.get("solar_noon"), row.get("day_length"), row.get("civil_twilight_begin"),
+                  row.get("solar_noon"), row.get("civil_twilight_begin"),
                   row.get("civil_twilight_end"), row.get("nautical_twilight_begin"),
                   row.get("nautical_twilight_end"), row.get("astronomical_twilight_begin"),
                   row.get("astronomical_twilight_end")))

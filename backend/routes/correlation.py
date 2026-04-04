@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models import db
 from sqlalchemy import text
+from routes.helpers import validate_region, validate_date
 
 correlation_bp = Blueprint("correlation", __name__)
 
@@ -14,8 +15,19 @@ def solar_weather_correlation():
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
 
+    err = validate_region(region)
+    if err:
+        return err
     if metric not in VALID_METRICS:
         return jsonify({"error": f"Invalid metric. Choose from: {VALID_METRICS}"}), 400
+    if start_date:
+        err = validate_date(start_date, "start_date")
+        if err:
+            return err
+    if end_date:
+        err = validate_date(end_date, "end_date")
+        if err:
+            return err
 
     col_map = {
         "temperature": "avg_temperature",
@@ -44,7 +56,6 @@ def solar_weather_correlation():
 
     rows = db.session.execute(query, params).mappings().all()
 
-    # Compute R-squared
     r_squared = None
     if len(rows) > 2:
         x = [float(r["metric_value"]) for r in rows]
@@ -60,8 +71,6 @@ def solar_weather_correlation():
         if denom > 0:
             r = (n * sum_xy - sum_x * sum_y) / (denom ** 0.5)
             r_squared = round(r * r, 4)
-
-            # Linear regression coefficients for trendline
             slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x ** 2)
             intercept = (sum_y - slope * sum_x) / n
         else:
@@ -91,6 +100,18 @@ def solar_daylight_correlation():
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
 
+    err = validate_region(region)
+    if err:
+        return err
+    if start_date:
+        err = validate_date(start_date, "start_date")
+        if err:
+            return err
+    if end_date:
+        err = validate_date(end_date, "end_date")
+        if err:
+            return err
+
     where = ["region = :region", "day_length_seconds IS NOT NULL"]
     params = {"region": region}
     if start_date:
@@ -109,7 +130,6 @@ def solar_daylight_correlation():
 
     rows = db.session.execute(query, params).mappings().all()
 
-    # R-squared for daylight vs solar
     r_squared = None
     if len(rows) > 2:
         x = [float(r["day_length_seconds"]) / 3600 for r in rows]

@@ -16,8 +16,9 @@ def create_table(conn):
                 generation_id SERIAL PRIMARY KEY,
                 respondent_id VARCHAR(10) NOT NULL REFERENCES respondent(respondent_id),
                 period TIMESTAMP NOT NULL,
-                date_id DATE NOT NULL REFERENCES date_dimension(date_id),
-                value_mwh DECIMAL(15, 3) NOT NULL
+                date_id DATE NOT NULL,
+                value_mwh DECIMAL(15, 3) NOT NULL,
+                UNIQUE (respondent_id, period)
             );
         """)
         conn.commit()

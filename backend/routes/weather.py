@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models import db
 from sqlalchemy import text
+from routes.helpers import validate_region, validate_date
 
 weather_bp = Blueprint("weather", __name__)
 
@@ -10,6 +11,18 @@ def weather_daily():
     region = request.args.get("region", "CISO")
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
+
+    err = validate_region(region)
+    if err:
+        return err
+    if start_date:
+        err = validate_date(start_date, "start_date")
+        if err:
+            return err
+    if end_date:
+        err = validate_date(end_date, "end_date")
+        if err:
+            return err
 
     where = ["region = :region"]
     params = {"region": region}

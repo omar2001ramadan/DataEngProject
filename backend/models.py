@@ -3,18 +3,6 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
-class DateDimension(db.Model):
-    __tablename__ = "date_dimension"
-    date_id = db.Column(db.Date, primary_key=True)
-    day_of_week = db.Column(db.String(10))
-    month = db.Column(db.Integer)
-    month_name = db.Column(db.String(10))
-    quarter = db.Column(db.Integer)
-    year = db.Column(db.Integer)
-    season = db.Column(db.String(10))
-    is_weekend = db.Column(db.Boolean)
-
-
 class Respondent(db.Model):
     __tablename__ = "respondent"
     respondent_id = db.Column(db.String(10), primary_key=True)
@@ -43,7 +31,7 @@ class SolarGeneration(db.Model):
     generation_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     respondent_id = db.Column(db.String(10), db.ForeignKey("respondent.respondent_id"), nullable=False, index=True)
     period = db.Column(db.DateTime, nullable=False, index=True)
-    date_id = db.Column(db.Date, db.ForeignKey("date_dimension.date_id"), nullable=False)
+    date_id = db.Column(db.Date, nullable=False)
     value_mwh = db.Column(db.Float, nullable=False)
 
 
@@ -51,7 +39,7 @@ class WeatherObservation(db.Model):
     __tablename__ = "weather_observation"
     observation_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     station_id = db.Column(db.String(50), db.ForeignKey("weather_station.station_id"), index=True)
-    date_id = db.Column(db.Date, db.ForeignKey("date_dimension.date_id"))
+    date_id = db.Column(db.Date)
     observation_datetime = db.Column(db.DateTime, index=True)
     dry_bulb_temp_c = db.Column(db.Float)
     dew_point_temp_c = db.Column(db.Float)
@@ -71,12 +59,11 @@ class DailySolarTiming(db.Model):
     __tablename__ = "daily_solar_timing"
     timing_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     respondent_id = db.Column(db.String(10), db.ForeignKey("respondent.respondent_id"), nullable=False, index=True)
-    date_id = db.Column(db.Date, db.ForeignKey("date_dimension.date_id"))
+    date_id = db.Column(db.Date)
     date = db.Column(db.Date, nullable=False, index=True)
     sunrise = db.Column(db.DateTime)
     sunset = db.Column(db.DateTime)
     solar_noon = db.Column(db.DateTime)
-    day_length_sec = db.Column(db.Integer)
     civil_twilight_begin = db.Column(db.DateTime)
     civil_twilight_end = db.Column(db.DateTime)
     nautical_twilight_begin = db.Column(db.DateTime)

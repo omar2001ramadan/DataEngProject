@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models import db
 from sqlalchemy import text
+from routes.helpers import validate_region, validate_date
 
 daylight_bp = Blueprint("daylight", __name__)
 
@@ -10,6 +11,18 @@ def daylight():
     region = request.args.get("region", "CISO")
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
+
+    err = validate_region(region)
+    if err:
+        return err
+    if start_date:
+        err = validate_date(start_date, "start_date")
+        if err:
+            return err
+    if end_date:
+        err = validate_date(end_date, "end_date")
+        if err:
+            return err
 
     where = ["t.respondent_id = :region"]
     params = {"region": region}
@@ -25,7 +38,7 @@ def daylight():
             t.date,
             t.sunrise,
             t.sunset,
-            t.day_length_sec,
+            EXTRACT(EPOCH FROM (t.sunset - t.sunrise))::INT AS day_length_sec,
             ds.total_mwh
         FROM daily_solar_timing t
         LEFT JOIN daily_summary ds

@@ -65,8 +65,15 @@ def pull_fresh_solar():
     df["value_mwh"] = df["value"]
     df = df[["respondent_id", "period", "date_id", "value_mwh"]].dropna()
 
-    df.to_sql("solar_generation", engine, if_exists="append", index=False, method="multi", chunksize=5000)
-    print(f"  Inserted {len(df)} new solar rows.")
+    with engine.connect() as conn:
+        for _, row in df.iterrows():
+            conn.execute(text("""
+                INSERT INTO solar_generation (respondent_id, period, date_id, value_mwh)
+                VALUES (:respondent_id, :period, :date_id, :value_mwh)
+                ON CONFLICT (respondent_id, period) DO NOTHING
+            """), dict(row))
+        conn.commit()
+    print(f"  Inserted up to {len(df)} new solar rows (duplicates skipped).")
     return len(df)
 
 
@@ -94,18 +101,9 @@ def pull_fresh_timing():
         df["respondent_id"] = respondent_id
         df["date_id"] = pd.to_datetime(df["date"]).dt.date
         df["date"] = pd.to_datetime(df["date"]).dt.date
-        df["day_length_sec"] = df["day_length"]
-
-        # Rename astronomical columns to match schema
-        rename = {
-            "astronomical_twilight_begin": "astronomical_twilight_begin",
-            "astronomical_twilight_end": "astronomical_twilight_end",
-        }
-        df = df.rename(columns=rename)
-
         out_cols = [
             "respondent_id", "date_id", "date", "sunrise", "sunset", "solar_noon",
-            "day_length_sec", "civil_twilight_begin", "civil_twilight_end",
+            "civil_twilight_begin", "civil_twilight_end",
             "nautical_twilight_begin", "nautical_twilight_end",
             "astronomical_twilight_begin", "astronomical_twilight_end",
         ]
@@ -114,8 +112,22 @@ def pull_fresh_timing():
                 df[col] = None
         df = df[out_cols]
 
-        df.to_sql("daily_solar_timing", engine, if_exists="append", index=False, method="multi")
-        print(f"  Inserted {len(df)} new timing rows for {respondent_id}.")
+        with engine.connect() as conn:
+            for _, row in df.iterrows():
+                conn.execute(text("""
+                    INSERT INTO daily_solar_timing
+                        (respondent_id, date_id, date, sunrise, sunset, solar_noon,
+                         civil_twilight_begin, civil_twilight_end,
+                         nautical_twilight_begin, nautical_twilight_end,
+                         astronomical_twilight_begin, astronomical_twilight_end)
+                    VALUES (:respondent_id, :date_id, :date, :sunrise, :sunset, :solar_noon,
+                            :civil_twilight_begin, :civil_twilight_end,
+                            :nautical_twilight_begin, :nautical_twilight_end,
+                            :astronomical_twilight_begin, :astronomical_twilight_end)
+                    ON CONFLICT (respondent_id, date) DO NOTHING
+                """), dict(row))
+            conn.commit()
+        print(f"  Inserted up to {len(df)} new timing rows for {respondent_id} (duplicates skipped).")
         total_inserted += len(df)
 
     return total_inserted
@@ -159,12 +171,13 @@ def main():
     print("\n" + "=" * 50)
     print("Pipeline complete!")
     with engine.connect() as conn:
-        for table in ['date_dimension', 'respondent', 'weather_station',
+        for table in ['respondent', 'weather_station',
                        'solar_generation', 'weather_observation', 'daily_solar_timing',
                        'daily_summary', 'monthly_summary']:
             count = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
             print(f"  {table}: {count:,} rows")
     print("=" * 50)
+    print("\nOpen the dashboard at: http://localhost:3000")
 
 
 if __name__ == "__main__":

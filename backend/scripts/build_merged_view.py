@@ -30,20 +30,25 @@ create_view_sql = f"""
         r.respondent_name,
         r.region_latitude,
         r.region_longitude,
-        -- Date Dimension
-        dd.date_id,
-        dd.day_of_week,
-        dd.month,
-        dd.month_name,
-        dd.quarter,
-        dd.year,
-        dd.season,
-        dd.is_weekend,
+        -- Date fields (derived from observation date)
+        wo.date_id,
+        TO_CHAR(wo.date_id, 'Day') AS day_of_week,
+        EXTRACT(MONTH FROM wo.date_id)::INT AS month,
+        TO_CHAR(wo.date_id, 'Month') AS month_name,
+        EXTRACT(QUARTER FROM wo.date_id)::INT AS quarter,
+        EXTRACT(YEAR FROM wo.date_id)::INT AS year,
+        CASE
+            WHEN EXTRACT(MONTH FROM wo.date_id) IN (12, 1, 2) THEN 'Winter'
+            WHEN EXTRACT(MONTH FROM wo.date_id) IN (3, 4, 5) THEN 'Spring'
+            WHEN EXTRACT(MONTH FROM wo.date_id) IN (6, 7, 8) THEN 'Summer'
+            ELSE 'Fall'
+        END AS season,
+        EXTRACT(ISODOW FROM wo.date_id) IN (6, 7) AS is_weekend,
         -- Solar Timing
         dst.sunrise,
         dst.sunset,
         dst.solar_noon,
-        dst.day_length_sec,
+        EXTRACT(EPOCH FROM (dst.sunset - dst.sunrise))::INT AS day_length_sec,
         dst.civil_twilight_begin,
         dst.civil_twilight_end,
         dst.nautical_twilight_begin,
@@ -56,13 +61,12 @@ create_view_sql = f"""
     FROM weather_observation wo
     INNER JOIN weather_station ws ON wo.station_id = ws.station_id
     INNER JOIN respondent r ON ws.respondent_id = r.respondent_id
-    INNER JOIN date_dimension dd ON wo.date_id = dd.date_id
     LEFT JOIN daily_solar_timing dst
         ON r.respondent_id = dst.respondent_id
-        AND dd.date_id = dst.date_id
+        AND wo.date_id = dst.date_id
     LEFT JOIN solar_generation sg
         ON r.respondent_id = sg.respondent_id
-        AND dd.date_id = sg.date_id;
+        AND wo.date_id = sg.date_id;
 """
 
 def create_view():
