@@ -26,7 +26,7 @@ A full-stack data pipeline that integrates solar generation, weather, and sunris
   - Web API Implementation:
     - Visualization implementation available in DataEngProject/frontend
     - Review Quick Start section below to host the API or visit [live dashboard](https://frontend-production-fc3d.up.railway.app/)
-- Dockerfile: backend/Dockerfile
+- Dockerfile: Two docker files located in backend/Dockerfile and frontend/Dockerfile
 - Documentation file: Located here :)
 
 ## Data Sources
