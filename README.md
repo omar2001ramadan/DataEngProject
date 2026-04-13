@@ -2,6 +2,33 @@
 
 A full-stack data pipeline that integrates solar generation, weather, and sunrise/sunset data for the California (CISO) and Texas (ERCO) grid regions. Data is pulled from three APIs, cleaned, loaded into PostgreSQL, and served through a Flask API with a React dashboard.
 
+## Repository Key Locations:
+
+- Python scripts containing data transformation code (Sanbir Rahman):
+  - backend/scripts/noaa_weather_pull.py
+  - backend/scripts/sunrise_sunset_pull.py
+  - backend/scripts/eia_solar_pull.py
+- SQL scripts containing table creation and data loading commands (Will Gillette):
+  - backend/scripts/build_db.py
+  - backend/scripts/build_tables_respondent.py
+  - backend/scripts/build_tables_timing.py
+  - backend/scripts/build_tables_solar.py
+  - backend/scripts/build_tables_station.py
+  - backend/scripts/build_tables_observation.py
+  - backend/scripts/build_merged_view.py
+  - backend/scripts/inspect_merged_view.ipynb
+- ERD Diagram (Burch Parsall): Provided within this documentation
+- Automation code and a web API implementation in Python (Omar Ramadan / Burch Parsall):
+  - Integration Scripts:
+    - backend/scripts/db_connect.py
+    - backend/scripts/ingest.py 
+    - backend/scripts/run_pipeline.py
+  - Web API Implementation:
+    - Visualization implementation available in DataEngProject/frontend
+    - Review Quick Start section below to host the API or visit [live dashboard](https://frontend-production-fc3d.up.railway.app/)
+- Dockerfile: backend/Dockerfile
+- Documentation file: Located here :)
+
 ## Data Sources
 
 - **EIA API v2** - Hourly solar generation (MWh) by region
