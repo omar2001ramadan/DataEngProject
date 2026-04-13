@@ -17,7 +17,7 @@ A full-stack data pipeline that integrates solar generation, weather, and sunris
   - backend/scripts/build_tables_observation.py
   - backend/scripts/build_merged_view.py
   - backend/scripts/inspect_merged_view.ipynb
-- ERD Diagram (Burch Parsall): Provided within this documentation
+- ERD Diagram (Burch Parsall): Provided within this documentation under the Database Schema section
 - Automation code and a web API implementation in Python (Omar Ramadan / Burch Parsall):
   - Integration Scripts:
     - backend/scripts/db_connect.py
